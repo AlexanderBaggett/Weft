@@ -1,0 +1,146 @@
+// examples/orders.weft
+// A small order service: HTTP + queue intake, one handler for both, auth on every path.
+
+// ---------- addresses ----------
+
+topic   orders.create : CreateOrder   on Queue;
+topic   orders.paid   : OrderPaid     on Queue;
+topic   orders        : OrderEvent    on Stream(partitions: 12, key: OrderId);
+channel orderEvents   : OrderEvent    (capacity: 1024, full: Backpressure);
+
+// ---------- models ----------
+
+model CreateOrder from Http | Queue
+{
+    Id<Customer>  Customer;
+    string        Note;
+    LineItem[]    Items;
+}
+
+model OrderPaid from Queue
+{
+    Id<Order>     Id;
+    Money         Amount;
+}
+
+model Order from Db
+{
+    Id<Order>     Id;
+    Id<Customer>  Customer;
+    string        Note;
+    Money         Total;
+    OrderStatus   Status;
+}
+
+// ---------- services ----------
+
+service OrderService : scoped
+    requires Db, Clock
+    exposes  IOrders
+{
+    Order Create(CreateOrder cmd)
+    {
+        var order = Order.New(cmd.Customer, cmd.Items, Clock.Now);
+        transaction
+        {
+            Db.Write(order);
+            Outbox.Send(orders, OrderEvent.Created(order));
+        }
+        return order;
+    }
+
+    Option<Order> Find(Id<Order> id)     => Db.Query<Order>(id);
+    void MarkPaid(Id<Order> id)          => Db.Update<Order>(id, o => o with { Status = Paid });
+    void ExpireStale(Instant now)        => Db.Update<Order>(o => o.Status == Pending && o.Created < now - 24h,
+                                                             o => o with { Status = Expired });
+    health => Db.Ping();
+}
+
+// ---------- receiver ----------
+
+receiver Orders : scoped
+    from Http, Queue, Timer
+    requires OrderService, Clock
+{
+    on Http.Post("/orders"), Queue(orders.create) requires Principal
+    Response<Order> Create(CreateOrder cmd)
+    {
+        Log($"create order for {cmd.Customer} note={cmd.Note}");   // rule: Note sanitized on the Http path
+        return Created(OrderService.Create(cmd));
+    }
+
+    on Http.Get("/orders/{id}") requires Principal
+    Response<Order> Get(Id<Order> id)
+        => OrderService.Find(id) or reject NotFound;
+
+    on Queue(orders.paid)
+    void Paid(OrderPaid evt)
+        => OrderService.MarkPaid(evt.Id);
+
+    on Timer(every: 5m)
+    void Sweep()
+        => OrderService.ExpireStale(Clock.Now);
+}
+
+// ---------- middleware graph ----------
+
+middleware Trace provides Correlation
+{
+    effect  msg.Correlation = msg.Headers?["X-Correlation"] ?? Correlation.New();
+    after   msg.Response.Headers["X-Correlation"] = msg.Correlation;
+    next    Timing;
+}
+
+middleware Timing
+{
+    effect  var t = Clock.Now;
+    after   Metrics.Record(msg.Address, Duration.Since(t));
+    next    Dispatch;
+}
+
+middleware Dispatch
+{
+    next match
+    {
+        msg.Origin == Timer                     => Route;       // only Sweep is reachable; it needs no Principal
+        msg.Origin == Http && msg.Path == "/health" => respond Ok;
+        else                                    => Auth;
+    }
+}
+
+middleware Auth
+    provides Principal
+{
+    effect  msg.Principal = Principal.From(msg.Headers["Authorization"]) or reject Unauthorized;
+    next    RateLimit;
+}
+
+middleware RateLimit from Http
+    requires Principal
+{
+    filter  !msg.Principal.IsInternal;
+    effect  Limiter.Take(msg.Principal.Id) or reject TooMany;
+    next    Route;
+}
+
+middleware Dedupe from Queue
+{
+    filter  msg.Attempt > 1;
+    effect  if (Seen(msg.Key)) respond;         // Ack duplicate
+    next    Trace;
+}
+
+pipeline Main entry match
+{
+    Http   => Trace;
+    Queue  => Dedupe;
+    Timer  => Trace;
+}
+
+// Compiler will reject this file if:
+//   - a path reaches `Create` or `Get` without passing `Auth` (the Timer=>Route branch
+//     is fine only because Sweep is the sole Timer binding and does not require Principal;
+//     add `requires Principal` to Sweep and that branch becomes an error)
+//   - `orders.create` is sent anywhere with a payload that isn't CreateOrder
+//   - `Email.Send` or any `external` call appears inside the transaction block
+//   - a singleton captures OrderService or msg

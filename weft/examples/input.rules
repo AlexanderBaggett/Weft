@@ -1,0 +1,94 @@
+// examples/input.rules
+// Input hygiene, secrets, and boundary logging for the orders example.
+
+scope project;                                   // file-level default
+
+// ---------- vocabulary ----------
+
+sink      Log(string msg);
+sink      Http.Send(string body);
+sink      Db.Write(string sql);
+
+transform Sanitize(string from Http | Queue) -> string;
+transform Redact(string from Env)           -> string;
+
+validate  NotEmpty(string s);
+validate  MaxLen(string s, int n);
+
+// ---------- rules ----------
+
+ruleset InputHygiene
+{
+    // Anything that came in over the wire gets sanitized before it is logged,
+    // wherever the log call is — controller, service, trigger, middleware.
+    rule SanitizeLoggedInput
+    {
+        target  Request from Http | Queue;
+        filter  string;
+        effect  before Log => Sanitize;
+    }
+
+    // Free-text fields are bounded at ingress.
+    rule BoundedNotes
+    {
+        target  CreateOrder.Note from Http | Queue;
+        effect  require MaxLen(_, 2000) => reject Invalid;
+    }
+
+    // Customer ids must be present; queue side too.
+    rule CustomerRequired
+    {
+        target  CreateOrder.Customer;
+        effect  require NotEmpty(_) => reject Invalid;
+    }
+}
+
+ruleset Secrets
+{
+    // Nothing from the environment reaches a log or the wire un-redacted.
+    rule NoEnvInLogs
+    {
+        target  string from Env;
+        effect  before Log => Redact;
+              forbid Http.Send;
+    }
+
+    // Secret<T> never reaches any sink. Belt and braces over the stdlib type.
+    rule SecretsNeverLeave
+    {
+        target  Secret<*>;
+        effect  forbid Log;
+              forbid Http.Send;
+              forbid Db.Write;
+    }
+}
+
+// ---------- triggers ----------
+
+trigger ServiceTiming
+{
+    target  boundary service;
+    effect  on exit  => Metrics.Record(point.Callee, point.Elapsed);
+            on throw => Metrics.Fail(point.Callee);
+}
+
+trigger AuditOrders
+{
+    scope   receiver Orders.*;
+    target  boundary receiver;
+    filter  args where !(arg is Secret);
+    effect  on enter => Audit.Log($"{point.Ambient<Principal>()?.Id} {point.Name}({point.Args})");
+              // point.Args carries provenance, so SanitizeLoggedInput fires on it here too
+}
+
+trigger DebugCrossings
+{
+    scope   namespace Orders.Internal;
+    target  boundary method internal;
+    effect  on enter => Log($"{point.Caller} -> {point.Callee}({point.Args})");
+}
+
+suppress DebugCrossings in module Release;
+
+use ruleset InputHygiene;
+use ruleset Secrets;

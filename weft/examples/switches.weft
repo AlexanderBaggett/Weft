@@ -1,0 +1,147 @@
+// examples/switches.weft
+// Flags, canaries, and kill switches applied to receivers, middleware, rules, and triggers.
+// Assumes the constructs from orders.weft and input.rules.
+
+// ---------- declarations ----------
+
+flag NewCheckout  : bool default off source Remote("flags") refresh 30s by Tenant
+    retire 2026-12-01;
+flag StrictInput  : bool default off source Db by Tenant;
+flag VerboseTrace : bool default off source Db refresh 10s;
+flag NewRateLimit : bool static default off;                   // build-time; dead arm eliminated
+
+switch group CheckoutRollout { NewCheckout, StrictInput }      // proved jointly
+
+// ---------- flags ----------
+
+receiver Checkout : scoped from Http requires Cart
+{
+    on Http.Post("/checkout") when NewCheckout
+    Response<Receipt> V2(Cart cart) => CheckoutV2.Run(cart);
+
+    on Http.Post("/checkout") when !NewCheckout                // compiler checks the two partition
+    Response<Receipt> V1(Cart cart) => CheckoutV1.Run(cart);
+}
+
+middleware RateLimitV2 from Http requires Principal
+{
+    scope   flag NewRateLimit;                                 // off → transparent; both states proved
+    effect  Limiter2.Take(msg.Principal.Id) or reject TooMany;
+    next    Route;
+}
+
+rule StrictSanitize
+{
+    scope   flag StrictInput, namespace Api;
+    target  Request from Http;
+    filter  string;
+    effect  before Log => SanitizeStrict;                      // Log(StrictInput ? SanitizeStrict(x) : x)
+}
+
+trigger DebugCrossings
+{
+    scope   flag VerboseTrace, namespace Orders.Internal;
+    target  boundary method internal;
+    effect  on enter => Log($"{point.Caller} -> {point.Callee}({point.Args})");
+}
+
+// ---------- canaries ----------
+
+canary PricingV2
+{
+    scope     service IPricing;
+    baseline  PricingV1;
+    candidate PricingV2;
+    select    5% by Tenant sticky;
+    judge     over 10m: error_rate <= baseline + 0.5%, p99 <= baseline * 1.2;
+    promote   auto steps 5% 25% 50% 100%;
+    rollback  auto;
+}
+
+canary RateLimiter
+{
+    scope     middleware RateLimit;
+    baseline  RateLimitV1;
+    candidate RateLimitV2;                                     // identical contract, or error
+    select    10% by Principal sticky;
+    judge     over 15m: error_rate <= baseline + 0.1%, p99 <= baseline * 1.1;
+    promote   auto steps 10% 50% 100%;
+    rollback  auto;
+}
+
+canary Sanitizer
+{
+    scope     rule SanitizeLoggedInput;
+    baseline  Sanitize;
+    candidate SanitizeStrict;                                  // same signature, or error
+    mode      shadow;                                          // run both, use baseline, diff
+    select    100%;
+    judge     over 1h: diff_rate < 0.01%, error_rate <= baseline;
+    promote   manual;
+}
+
+canary MetricsBackend
+{
+    scope     trigger ServiceTiming;
+    baseline  on exit => Metrics.Record(point.Callee, point.Elapsed);
+    candidate on exit => MetricsV2.Record(point.Callee, point.Elapsed);
+    select    5%;
+    judge     over 30m: overhead_p99 <= baseline * 1.2, error_rate <= baseline;
+    promote   auto;
+}
+
+// ---------- kill switches ----------
+
+kill Recommendations
+{
+    scope   service RecommendationService;
+    killed  => Fallback.Empty;                                 // must satisfy the contract
+}
+
+kill BulkUploads
+{
+    scope   receiver Uploads.Bulk;
+    killed  => reject Unavailable("Bulk uploads are temporarily disabled");
+}
+
+kill RateLimiting
+{
+    scope   middleware RateLimit;                              // transparent when killed; proofs re-run
+}
+
+// kill Auth { scope middleware Auth; }
+//   → COMPILE ERROR: Admin.Users requires Principal; no path provides it with Auth killed.
+
+kill Auth
+{
+    scope   middleware Auth;
+    killed  => reject Unavailable("Auth backend down");        // fail closed: legal
+}
+
+kill NoteValidation
+{
+    scope   rule BoundedNotes;
+    trip    when reject_rate > 30% over 5m;                    // validator suddenly rejecting everything
+    reset   after 15m, probe 1%;
+}
+
+kill DebugCrossings
+{
+    scope   trigger DebugCrossings;
+    trip    when overhead_p99 > 2ms over 1m;                   // too expensive → kills itself
+    reset   after 10m;
+}
+
+kill Pricing                                                   // circuit breaker
+{
+    scope   service IPricing;
+    trip    when error_rate > 50% over 1m;
+    reset   after 5m, probe 1%;
+    killed  => reject Unavailable;
+}
+
+kill QueueIntake
+{
+    scope   origin Queue;                                      // stop consuming; messages stay queued
+    unreachable => last-known;
+}
