@@ -75,7 +75,7 @@ transform Parse(string from Http) -> int;                 // type change also di
 discharges the whole chain rooted at it.
 
 A transform is a promise. The compiler does not verify that `Sanitize` actually
-sanitizes; it verifies that nothing reaches a sink without passing through it.
+sanitizes; it verifies that nothing reaches a guarded point without passing through it.
 
 ## Matching
 
@@ -102,7 +102,7 @@ Db, Cache, Config, Env, Clock, Random
 rule NoSecretsInLogs
 {
     target  string from Env;
-    effect  forbid Log;
+    effect  at Egress => forbid;
 }
 ```
 

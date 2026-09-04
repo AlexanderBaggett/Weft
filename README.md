@@ -17,7 +17,7 @@ base classes, middleware ordering, and discipline.
 Weft makes it declarative and verifiable:
 
 - Values carry **provenance** — where they came from (`string from Http`).
-- **Rules** fire when a value with a given provenance reaches a **sink** (`Log`, `Db.Write`).
+- **Rules** attach effects to values — at binding, at a call, or when a value crosses a boundary — and follow them through their lineage.
 - **Triggers** fire at method boundaries.
 - **Middleware** is a routing graph, not a list. The compiler proves properties over every path.
 - **Receivers** replace controllers and bind to any **origin** — HTTP, queues, streams, timers, sockets — with the same machinery.
@@ -32,14 +32,14 @@ All of it shares one four-part shape: **scope · target · filter · effect**.
 ```csharp
 model LoginRequest from Http { string User; string Pass; }
 
-sink      Log(string msg);
 transform Sanitize(string from Http) -> string;
 
-rule SanitizeLoggedInput
+rule IncomingStrings
 {
     target  Request from Http;
     filter  string;
-    effect  before Log => Sanitize;
+    effect  => Trim;                  // at bind, eagerly
+    effect  at Log => Sanitize;       // lazily, only if it is logged
 }
 
 middleware Auth from Http provides Principal
@@ -54,7 +54,7 @@ receiver Accounts : scoped from Http, Queue requires UserService
     on Http.Post("/login"), Queue(accounts.login)
     Response<Session> Login(LoginRequest req)
     {
-        Log(req.User);                 // compiler emits Log(Sanitize(req.User))
+        Log(req.User);                 // compiler emits Log(Sanitize(Trim(req.User)))
         return UserService.Login(req);
     }
 }

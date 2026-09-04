@@ -100,7 +100,7 @@ rule StrictSanitize
     scope   flag StrictInput, namespace Api;             // flag AND namespace
     target  Request from Http;
     filter  string;
-    effect  before Log => SanitizeStrict;                // emitted as Log(StrictInput ? SanitizeStrict(x) : x)
+    effect  at Log => SanitizeStrict;                    // emitted as Log(StrictInput ? SanitizeStrict(x) : x)
 }
 ```
 
@@ -329,7 +329,7 @@ kill AllTracing
 
 - **`forbid` cannot be switched.** It's a compile-time proof, not a runtime effect. Any
   switch scoped to a rule containing `forbid` is an error. A runtime-toggleable block is
-  `require Never(_) => reject`.
+  `effect at Egress => require Never(_) else reject Forbidden`.
 - **`provides` under a switch is re-proved per state.** A flagged or killable provider
   must not be the sole provider on any path that needs it, or must fail closed.
 - **Canary arms:** on rules, transforms with identical signatures; on triggers, effects on

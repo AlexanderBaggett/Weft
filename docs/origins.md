@@ -134,7 +134,7 @@ Stamp provenance; never receive.
 Db, Cache, Config, Env, Clock, Random
 ```
 
-Used by rules (`forbid Log` on `from Env`) and by test rewiring (`Clock`, `Random` can be
+Used by rules (`target string from Env; effect at Egress => forbid;`) and by test rewiring (`Clock`, `Random` can be
 substituted per scope in `weft.toml`).
 
 ## Typed addresses

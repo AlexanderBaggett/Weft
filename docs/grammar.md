@@ -7,7 +7,7 @@ are omitted. `?` optional, `*` zero or more, `+` one or more, `|` alternation.
 compilation-unit  = { declaration } ;
 
 declaration       = origin-decl | model-decl | service-decl | receiver-decl
-                  | sink-decl | transform-decl | validate-decl
+                  | sink-decl | transform-decl | validate-decl | filter-decl
                   | rule-decl | trigger-decl | ruleset-decl | suppress-decl
                   | middleware-decl | pipeline-decl
                   | ambient-decl | address-decl | table-decl
@@ -57,9 +57,10 @@ address           = ident "." ident [ "(" arg-list ")" ] [ "." ident ]   (* Http
 
 (* ---------- rule vocabulary ---------- *)
 
-sink-decl         = "sink"      qualified-ident "(" param-list ")" ";" ;
 transform-decl    = "transform" ident "(" typed ident ")" "->" type ";" ;
 validate-decl     = "validate"  ident "(" param-list ")" ";" ;
+sink-decl         = "sink" ident "=" qualified-ident { "," qualified-ident } ";" ;   (* a named set of points *)
+filter-decl       = "filter" ident "=" filter-expr ";" ;                            (* a named, reusable filter *)
 
 (* ---------- the four-part shape ---------- *)
 
@@ -74,29 +75,59 @@ scope-term        = "project"
                   | [ "!" ] "flag" ident ;
 scope-directive   = scope-clause ;                               (* file-level default *)
 
-filter-clause     = "filter" expression ";" ;
 priority-clause   = "priority" integer ";" ;
 
 (* ---------- rules ---------- *)
 
-rule-decl         = "rule" ident "{" [ scope-clause ] rule-target [ filter-clause ]
-                    [ priority-clause ] "effect" rule-effect { rule-effect } "}" ;
+rule-decl         = [ "static" ] "rule" ident "{"
+                    [ scope-clause ] rule-target { filter-clause } [ priority-clause ]
+                    effect-clause { effect-clause } "}" ;
+
 rule-target       = "target" typed [ "in" "{" ident-list "}" ] ";"
                   | "target" qualified-ident [ provenance ] ";" ;           (* Model.Field *)
-rule-effect       = "before"  qualified-ident "=>" ident ";"
-                  | "after"   qualified-ident "=>" ident ";"
-                  | "require" call "=>" ( "reject" outcome | "throw" type ) ";"
-                  | "forbid"  qualified-ident ";"
-                  | "replace" qualified-ident "=>" ident ";" ;
 
-ruleset-decl      = "ruleset" ident "{" { rule-decl | trigger-decl } "}" ;
+filter-clause     = "filter" filter-expr ";" ;                   (* several lines AND together *)
+filter-expr       = filter-term { ( "||" | "&&" ) filter-term } ;
+filter-term       = [ "not" | "!" ] filter-atom | "(" filter-expr ")" ;
+filter-atom       = type-filter
+                  | property-pattern
+                  | [ type ] "where" expression                   (* value's members in scope; `value` = whole *)
+                  | "field" "." ident comparison                  (* Name, Path, Type, Index, Optional *)
+                  | "field" "has" attribute
+                  | type "[" "]" ( "any" | "all" ) ( property-pattern | "where" expression )
+                  | "each" "of" type "[" "]"
+                  | "lineage" lineage-pred
+                  | "when" expression                             (* ambients, flags, msg *)
+                  | ident ;                                       (* a named filter *)
+type-filter       = type { "|" type } | attribute ;              (* type may use `*` wildcards: Secret<*> *)
+property-pattern  = "{" prop-sub { "," prop-sub } "}" ;
+prop-sub          = ident ":" pattern ;
+pattern           = constant | relational constant | "null" | "not" pattern
+                  | pattern ( "or" | "and" ) pattern | type | property-pattern ;
+lineage-pred      = "crossed" qualified-ident | "transformed" "by" ident | "hops" comparison ;
+
+effect-clause     = "effect" [ "at" point-expr [ "where" expression ] ] "=>" action ";" ;
+point-expr        = point { "," point } ;
+point             = "bind"
+                  | "call" ( qualified-ident | glob )
+                  | qualified-ident                               (* shorthand for call *)
+                  | "after" qualified-ident
+                  | "cross" [ ( "into" | "out" "of" ) ( qualified-ident | glob ) ]
+                  | ident ;                                       (* a sink set *)
+action            = call                                          (* replaces if same type, observes if void; `_` = value *)
+                  | "require" call "else" ( "reject" outcome [ expression ] | "throw" type )
+                  | "forbid"
+                  | "(" ident ")" block ;                          (* return replaces; none observes; reject allowed *)
+
+ruleset-decl      = "ruleset" ident "{" { filter-decl | rule-decl | trigger-decl } "}" ;
 suppress-decl     = "suppress" [ "ruleset" ] ident "in" scope-expr ";" ;
 use-directive     = "use" "ruleset" ident ";" ;
 
 (* ---------- triggers ---------- *)
 
-trigger-decl      = "trigger" ident "{" [ scope-clause ] trigger-target [ filter-clause ]
+trigger-decl      = "trigger" ident "{" [ scope-clause ] trigger-target [ trigger-filter ]
                     [ priority-clause ] "effect" trigger-effect { trigger-effect } "}" ;
+trigger-filter    = "filter" expression ";" ;                    (* over point / args *)
 trigger-target    = "target" "boundary" boundary-kind [ boundary-mod ] [ qualified-ident ] ";" ;
 boundary-kind     = "method" | "service" | "receiver" | "transform" ;
 boundary-mod      = "internal" | "external" ;
@@ -105,13 +136,16 @@ trigger-effect    = "on" ( "enter" | "exit" | "throw" ) "=>" ( expression | bloc
 (* ---------- middleware ---------- *)
 
 middleware-decl   = "middleware" ident [ generic-params ] { mw-clause }
-                    "{" [ scope-clause ] [ filter-clause ] [ "effect" block-or-stmts ]
+                    "{" [ scope-clause ] [ "filter" expression ";" ] [ "guard" ( "match" match-block | block ) ]
+                        [ "effect" block-or-stmts ]
                         [ "after" block-or-stmts ] next-clause "}" ;
 mw-clause         = "from"     ident-list
                   | "provides" ident-list
                   | "requires" ident-list
                   | "reentrant" "(" "max" ":" integer ")" ;
-next-clause       = "next" ( next-target ";" | "{" { expression "=>" next-target ";" } [ "else" "=>" next-target ";" ] "}" ) ;
+match-block       = "{" { expression "=>" verdict-or-target ";" } [ "else" "=>" verdict-or-target ";" ] "}" ;
+verdict-or-target = "approve" | "reject" outcome [ expression ] | next-target ;
+next-clause       = "next" ( next-target ";" | "match" match-block | block ) ;   (* block must `return` a next-target *)
 next-target       = ident                                        (* another node *)
                   | "any" expression "else" terminal
                   | ident "[" expression "]" "else" terminal        (* table lookup *)
@@ -177,9 +211,9 @@ qualified-ident   = ident { "." ident } ;
 ## Reserved words (beyond C#'s)
 
 ```
-origin model service receiver sink transform validate
+origin model service receiver sink transform validate static
 rule trigger ruleset suppress middleware pipeline ambient topic channel
-scope target filter effect before after require forbid replace
+scope target filter effect at after require forbid bind call cross into each lineage where when
 from via only provides requires exposes config mode carries
 on next respond reject entry boundary internal external
 singleton scoped transient idempotent external pure

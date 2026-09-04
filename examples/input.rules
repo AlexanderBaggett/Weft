@@ -1,0 +1,117 @@
+// examples/input.rules
+// Input hygiene, secrets, and boundary logging for the orders example.
+
+scope project;                                   // file-level default
+
+// ---------- vocabulary ----------
+
+transform Sanitize(string from Http | Queue) -> string;   // discharges Http/Queue
+transform Redact(string from Env)           -> string;    // discharges Env
+
+validate  NotEmpty(string s);
+validate  MaxLen(string s, int n);
+
+sink      Egress  = Log, Http.Send, Queue.Send;           // named point sets
+sink      Persist = Db.Write, Db.Update, Db.Delete;
+
+filter    Sensitive = field.Name ends "Password" || field has [Secret] || Secret<*>;
+filter    FreeText  = string && (field.Name ends "Note" || field.Name ends "Comment");
+
+// ---------- rules ----------
+
+ruleset InputHygiene
+{
+    // Every wire-sourced string is trimmed on arrival and sanitized if it is ever logged,
+    // wherever the log call is — controller, service, trigger, middleware.
+    rule IncomingStrings
+    {
+        target  Request from Http | Queue;
+        filter  string;
+        effect  => Trim;                                  // at bind
+        effect  at Log => Sanitize;                       // lazily; idempotent
+    }
+
+    // Free-text fields are bounded at ingress; free-tier tenants get truncated instead.
+    rule BoundedNotes
+    {
+        target  Request from Http | Queue;
+        filter  FreeText;
+        filter  { Length: > 2000 };
+        filter  when Tenant.Tier != Free;
+        effect  => require MaxLen(_, 2000) else reject Invalid("Text exceeds 2000 characters");
+    }
+
+    rule TruncateNotesForFree
+    {
+        target  Request from Http | Queue;
+        filter  FreeText;
+        filter  { Length: > 2000 };
+        filter  when Tenant.Tier == Free;
+        effect  => Truncate(_, 2000);
+        effect  at Log where point.Caller in Api.* => (v) { Metrics.Count("long_note"); };
+    }
+
+    // Customer ids must be present, on the queue path too.
+    rule CustomerRequired
+    {
+        target  CreateOrder.Customer;
+        effect  => require NotEmpty(_) else reject Invalid;
+    }
+
+    // Anything crossing into persistence from the wire gets audited, unchanged.
+    rule AuditWireToDb
+    {
+        target  * from Http | Queue;
+        effect  at cross into Db.* => (v) { Audit.Record(point.Site, v.Provenance); };
+    }
+}
+
+ruleset Secrets
+{
+    // Nothing from the environment reaches a log or the wire un-redacted.
+    rule NoEnvOut
+    {
+        target  string from Env;
+        effect  at Log => Redact;
+        effect  at Http.Send, Queue.Send => forbid;
+    }
+
+    // Sensitive fields never leave, never persist in the clear.
+    static rule SensitiveNeverLeaves
+    {
+        target  Request from Http;
+        filter  Sensitive;
+        effect  at Egress  => forbid;
+        effect  at Persist => forbid;
+    }
+}
+
+// ---------- triggers ----------
+
+trigger ServiceTiming
+{
+    target  boundary service;
+    effect  on exit  => Metrics.Record(point.Callee, point.Elapsed);
+            on throw => Metrics.Fail(point.Callee);
+}
+
+trigger AuditOrders
+{
+    scope   receiver Orders.*;
+    target  boundary receiver;
+    filter  args where !(arg is Secret);
+    effect  on enter => Audit.Log($"{point.Ambient<Principal>()?.Id} {point.Name}({point.Args})");
+              // point.Args carries provenance, so IncomingStrings' `at Log` effect fires here too
+}
+
+trigger DebugCrossings
+{
+    scope   namespace Orders.Internal;
+    target  boundary method internal;
+    effect  on enter => Log($"{point.Caller} -> {point.Callee}({point.Args})");
+}
+
+suppress DebugCrossings in module Release;
+
+use ruleset InputHygiene;
+use ruleset Secrets;

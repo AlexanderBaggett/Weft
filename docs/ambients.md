@@ -107,6 +107,6 @@ ambients describe *the context a message is in*. Both feed rules:
 rule TenantIsolation
 {
     target  Query from Db;
-    effect  require Tenant.Matches(_) => reject Forbidden;
+    effect  => require Tenant.Matches(_) else reject Forbidden;
 }
 ```

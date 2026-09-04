@@ -61,27 +61,40 @@ Open: does `.Length` carry it? Are `List<string from Http>` and `List<string>` d
 
 ## Rules — value-targeted
 
-Fire when a tagged value reaches a declared `sink`.
+Select values (type + provenance + shape), attach effects at **points** on their lineage.
 
 ```csharp
-sink      Log(string msg);
-transform Sanitize(string from Http) -> string;
-validate  NotEmpty(string s);
+transform Sanitize(string from Http) -> string;   // the only thing that discharges provenance
+validate  MaxLen(string s, int n);
+sink      Egress = Log, Http.Send, Queue.Send;    // a named set of points
 
-rule SanitizeLoggedInput
+rule IncomingStrings
 {
-    target  Request from Http;              // or: from Http in { LoginRequest, SignupRequest }
-    filter  string;
-    effect  before Log => Sanitize;         // idempotent: stops matching once discharged
+    target  Request from Http in { LoginRequest, SignupRequest };   // source filter lives here
+    filter  string;                          // 0..n lines, AND'd
+    filter  field.Name ends "Note" || { Length: > 2000 };
+    effect  => Trim;                         // at bind (default): eager
+    effect  at Log => Sanitize;              // lazy: only if logged; idempotent once discharged
+    effect  at Egress => forbid;             // compile-time
+    effect  at cross into Db.* => (v) { Audit.Record(point.Site); return v; };
 }
 ```
 
-Effect kinds: `before Sink => Transform` · `after Sink => Fn` · `require Validate => reject Outcome`
-· `forbid Sink` · (`replace` — maybe not)
+Points: `bind` · `call Fn` / glob / bare name · `after Fn` · `cross into|out of X` · named
+set. Site predicate on the point: `at Log where point.Caller in Api.*`.
 
-Precedence: narrower scope > narrower target > `priority N`. `forbid` always wins.
-Grouping: `ruleset`, `use ruleset`, `suppress X in scope`. Rules live in `.rules` files
-and apply by scope, not import.
+Actions: `=> Fn` (replace if same type, observe if void; `_` = value) ·
+`=> require Check else reject Outcome` · `=> forbid` · `=> (v) { ... }` (return replaces).
+
+Filters: type (`string | string[]`, `not Id<*>`, `[Pii]`) · property pattern
+(`{ Items: { Count: >= 3 } }`) · predicate (`string where Length > 50`) · field
+(`field.Name ends "Password"`, `field has [Secret]`) · collection (`any`/`all`/`each of`) ·
+lineage (`lineage crossed X`) · context (`when Tenant.Tier == Free`). Named:
+`filter Sensitive = ...;`. Type/field/lineage resolve at compile time; patterns,
+predicates, `when` emit a branch. `static rule` forbids runtime residue.
+
+Precedence: narrower scope > narrower target > `priority N`; `forbid` always wins.
+Grouping: `ruleset`, `use`, `suppress X in scope`. Rules live in `.rules` files.
 
 ---
 
@@ -260,7 +273,7 @@ Response<Receipt> Bulk(File[] files)
 }
 ```
 
-Same rules as middleware guards. Declarative validation (`rule ... require X => reject Invalid`)
+Same rules as middleware guards. Declarative validation (`rule ... effect => require X else reject Invalid`)
 and imperative guards produce the same outcome + Problem; use rules for the cross-cutting
 case, guards for the one-off.
 
@@ -315,7 +328,7 @@ middleware RateLimitV2 from Http requires Principal
 { scope flag NewRateLimit; ... }                       // off → transparent; both states proved
 
 rule StrictSanitize
-{ scope flag StrictInput; target Request from Http; filter string; effect before Log => SanitizeStrict; }
+{ scope flag StrictInput; target Request from Http; filter string; effect at Log => SanitizeStrict; }
 
 trigger DebugCrossings
 { scope flag VerboseTrace; target boundary method internal; effect on enter => Log(...); }
@@ -372,7 +385,7 @@ cache OrderById
 }
 ```
 
-- **Stale-cache proof:** every sink in the project that writes `Order` must appear in
+- **Stale-cache proof:** every write site in the project for `Order` must appear in
   `invalidate on`, or a warning names the write site.
 - **Key adequacy:** if the target `requires Tenant`, `Tenant` must be in the key.
   Cross-tenant cache leaks become a compile error.
@@ -401,7 +414,7 @@ Call classifications: `idempotent`, `external`, `pure`. Declared or inferred? Un
 
 `Id<T>`, `Secret<T>`, `Response<T>`, `Problem`, `Page<T>`, `Message<T>`, `Instant`,
 `Duration`, refinement types (`type Email = string where IsEmail`). `Secret<T>` ships
-with `forbid Log, Http.Send, Db.Write` rules attached.
+with `at Egress => forbid` and `at Persist => forbid` rules attached.
 
 ---
 
@@ -436,8 +449,9 @@ Rules files are discovered by the project, not imported by source files. A rule'
 ## Vocabulary
 
 - **Provenance** — the set of origins a value has passed through.
-- **Sink** — a declared function at which value-rules fire.
-- **Point** — a boundary crossing (method enter/exit/throw) at which triggers fire.
+- **Point** — a place on a value's lineage where a rule effect fires: `bind`, a call, a boundary crossing.
+- **Sink** — a named set of points, e.g. `Egress`.
+- **Boundary** — a method/service crossing (enter/exit/throw) at which triggers fire.
 - **Envelope** — the shape of `msg` for a given origin.
 - **Outcome** — a symbolic result (`Unauthorized`, `Invalid`, …) each origin maps to a transport-specific action.
 - **Address** — a location within an origin: a route, a topic, a channel name, a schedule.

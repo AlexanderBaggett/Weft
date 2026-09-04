@@ -35,7 +35,7 @@ rule StrictSanitize
     scope   flag StrictInput, namespace Api;
     target  Request from Http;
     filter  string;
-    effect  before Log => SanitizeStrict;                      // Log(StrictInput ? SanitizeStrict(x) : x)
+    effect  at Log => SanitizeStrict;                          // Log(StrictInput ? SanitizeStrict(x) : x)
 }
 
 trigger DebugCrossings

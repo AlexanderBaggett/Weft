@@ -21,11 +21,13 @@ Decisions not yet made, roughly in order of how much they constrain everything e
 
 ## Rules
 
-5. **Effects on sinks that aren't direct calls.** If `Log` is called through an interface
-   or delegate, can the compiler still insert `Sanitize`? Requires sink identity to be
-   part of the contract type. Probably: `sink` is a modifier on interface members too.
-6. **`replace` semantics.** Is `replace` worth having? It makes reading a call site
-   unreliable. Might drop it and require `forbid` + explicit code.
+5. **Points that aren't direct calls.** If `Log` is called through an interface or
+   delegate, can the compiler still fire `at Log`? Probably: point identity is part of
+   the contract type, so `at ILogger.Log` works and a delegate typed `Action<string>`
+   does not.
+6. **Structural filter matching.** A property pattern with no preceding type filter
+   matches any field that has the named members. Is that too clever? Alternative: require
+   a type filter first.
 7. **Rules on return values.** `target` selects inputs today. Do we want
    `target Order from OrderService` at `Http.Send` — i.e. redaction on the way out?
    Yes, and the current design already allows it; verify the examples read well.

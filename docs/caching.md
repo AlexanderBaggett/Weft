@@ -24,7 +24,7 @@ key defaults to route + query + `Principal` if required).
 
 ## Checks the compiler performs
 
-- **Stale-cache proof.** Every sink that writes the cached type — `Db.Write`, `Db.Update`,
+- **Stale-cache proof.** Every write site for the cached type — `Db.Write`, `Db.Update`,
   `Db.Delete`, receivers on typed topics/streams carrying it — must appear in an
   `invalidate on` clause. Otherwise a warning names the write site:
   *"Order written at OrderService.MarkPaid; cache OrderById not invalidated."*
@@ -52,4 +52,4 @@ To deliberately not invalidate on a known write:
             ignore Db.Update(Order.Status);          // status changes don't affect what Find returns
 ```
 
-`ignore` is per-sink and per-field so the check stays live for everything else.
+`ignore` is per-site and per-field so the check stays live for everything else.

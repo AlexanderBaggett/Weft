@@ -83,7 +83,7 @@ Response<Receipt> Bulk(File[] files)
 ```
 
 Same semantics as middleware guards: exhaustive `approve`/`reject`, no mutation. Rules
-(`require Validate => reject Invalid`) are the declarative, cross-cutting form; guards are
+(`effect => require Validate else reject Invalid`) are the declarative, cross-cutting form; guards are
 the imperative, one-off form. Both produce the same outcome and `Problem`.
 
 ## `requires` on receivers

@@ -61,7 +61,7 @@ Available inside trigger effects.
 | `point.Ambient<T>()` | `T` | all — read an ambient at the crossing |
 
 `point.Args` preserves provenance: an argument that is `string from Http` remains so
-inside the trigger, which means value-rules fire on it if the trigger passes it to a sink.
+inside the trigger, which means value-rules fire on it if the trigger passes it to a rule point such as `Log`.
 
 ## Effects
 
@@ -74,7 +74,7 @@ on enter => { statements }         // block form
 
 Effects run synchronously at the crossing. They cannot alter arguments or results —
 triggers observe. If you want to change what crosses a boundary, that is a rule
-(`before`/`replace`) or middleware.
+(an `at` effect that replaces) or middleware.
 
 ## Common triggers
 
