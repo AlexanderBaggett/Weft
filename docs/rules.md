@@ -188,21 +188,29 @@ validate  MaxLen(string s, int n);                        // boolean
 ## Idempotence of transforms
 
 `at Log => Sanitize` fires only while the value's provenance still matches the target.
-Once `Sanitize` runs — inserted or hand-written — the tag is discharged and the rule no
-longer matches. A value is never sanitized twice, and code that already sanitizes is
-left alone. An eager `=> Sanitize` at bind therefore makes later lazy rules for the same
-tag no-ops, which is the intended reading of "sanitized, then logged."
+The result of `Sanitize` is discharged and no longer matches. A lazy insertion replaces
+only the selected argument use: two later `Log(req.User)` calls can each need sanitation
+because the original field remains tagged. A separately bound clean value does not.
+An eager `=> Sanitize` at bind replaces the bound value before the receiver sees it,
+making later lazy rules for the same roots no-ops. This follows the accepted
+[replacement contract](decisions/0001-phase-1-semantics.md#b-rule-replacement-and-precedence).
 
 ## Precedence
 
 When more than one rule matches the same value at the same point:
 
-1. Narrower **scope** wins (`method` > `type` > `namespace` > `module` > `project`).
+1. Narrower **scope** wins (`method` > `type` > `namespace` > `project`).
 2. Then narrower **target** (`LoginRequest.Pass` > `LoginRequest` > `Request`).
 3. Then `priority N` (higher wins).
 4. Otherwise both apply, in declaration order, with a warning.
 
 `forbid` always wins.
+
+Precedence applies to the whole matching rule at that value/point; broader validators
+and observers do not implicitly compose when a more specific rule wins. Runtime filters
+can make the narrower rule ineligible, in which case the broader fallback applies.
+Matching prohibitions are checked against incoming provenance regardless of specificity.
+Generated calls participate in the same checks, and recursive insertion is an error.
 
 ## Rules under switches
 
@@ -222,7 +230,7 @@ ruleset InputHygiene
 
 use ruleset InputHygiene;
 suppress SanitizeLoggedInput in namespace Tests;
-suppress ruleset InputHygiene in module Fixtures;
+suppress ruleset InputHygiene in project Fixtures;
 ```
 
 ## Diagnostics

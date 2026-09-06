@@ -1,0 +1,14 @@
+{
+  "id": "deferred-feature",
+  "sources": {
+    "main.weft": "origin Http;"
+  },
+  "diagnostics": [
+    {
+      "code": "WF2009",
+      "file": "main.weft",
+      "line": 1,
+      "column": 1
+    }
+  ]
+}

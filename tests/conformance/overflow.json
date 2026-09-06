@@ -1,0 +1,8 @@
+{
+  "id": "overflow",
+  "sources": {
+    "main.weft": "void Main() { var max = 2147483647; Print(max + 1); var min = -2147483648; Print(min % -1); var big = 9223372036854775807L; Print(big + 1L); var low = -9223372036854775808L; Print(low % -1L); }"
+  },
+  "stdout": "-2147483648\n0\n-9223372036854775808\n0\n",
+  "exitCode": 0
+}

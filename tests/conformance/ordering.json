@@ -1,0 +1,8 @@
+{
+  "id": "ordering",
+  "sources": {
+    "main.weft": "int Mark(int x) { Print(x); return x; } int Sum(int a, int b) => a + b; bool Flag() { Print(\"called\"); return true; } void Main() { Print(Sum(Mark(1), Mark(2))); Print(false && Flag()); Print(true || Flag()); }"
+  },
+  "stdout": "1\n2\n3\nfalse\ntrue\n",
+  "exitCode": 0
+}

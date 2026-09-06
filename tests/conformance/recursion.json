@@ -1,0 +1,8 @@
+{
+  "id": "recursion",
+  "sources": {
+    "main.weft": "int Fib(int n) { if (n <= 1) return n; return Fib(n - 1) + Fib(n - 2); } void Main() { Print(Fib(8)); }"
+  },
+  "stdout": "21\n",
+  "exitCode": 0
+}

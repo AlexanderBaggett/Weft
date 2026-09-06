@@ -32,7 +32,7 @@ target  boundary transform;                  // every transform call — audit s
 ```
 
 `internal` is the interesting one: it selects calls where both ends are inside the
-scope, which is what "log what gets passed between methods in this module" means.
+scope, which is what "log what gets passed between methods in this project" means.
 
 ## Filter
 

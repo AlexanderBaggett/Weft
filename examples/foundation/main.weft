@@ -1,0 +1,17 @@
+namespace Demo;
+
+int Twice(int value) => value * 2;
+
+int Main()
+{
+    var total = 0;
+    var i = 1;
+    while (i <= 4)
+    {
+        total = total + Twice(i);
+        i = i + 1;
+    }
+    Print("Weft on both runtimes: " + total);
+    if (total == 20) return 0;
+    return 1;
+}

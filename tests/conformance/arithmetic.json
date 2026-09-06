@@ -1,0 +1,8 @@
+{
+  "id": "arithmetic",
+  "sources": {
+    "main.weft": "int Twice(int x) => x * 2; void Main() { var x = 0; var i = 1; while (i <= 4) { x = x + Twice(i); i = i + 1; } Print(x); Print(7 / 3); Print(-7 % 3); }"
+  },
+  "stdout": "20\n2\n-1\n",
+  "exitCode": 0
+}

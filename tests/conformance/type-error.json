@@ -1,0 +1,14 @@
+{
+  "id": "type-error",
+  "sources": {
+    "main.weft": "void Main() { int x = true; }"
+  },
+  "diagnostics": [
+    {
+      "code": "WF2003",
+      "file": "main.weft",
+      "line": 1,
+      "column": 23
+    }
+  ]
+}

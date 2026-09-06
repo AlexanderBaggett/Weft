@@ -111,7 +111,7 @@ trigger DebugCrossings
     effect  on enter => Log($"{point.Caller} -> {point.Callee}({point.Args})");
 }
 
-suppress DebugCrossings in module Release;
+suppress DebugCrossings in project Release;
 
 use ruleset InputHygiene;
 use ruleset Secrets;

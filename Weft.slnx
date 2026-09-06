@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/runtime/" />
+  <Folder Name="/runtime/dotnet/">
+    <Project Path="runtime/dotnet/Weft.Runtime/Weft.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Weft.Backend.DotNet/Weft.Backend.DotNet.csproj" />
+    <Project Path="src/Weft.Backend.Jvm/Weft.Backend.Jvm.csproj" />
+    <Project Path="src/Weft.Cli/Weft.Cli.csproj" />
+    <Project Path="src/Weft.Compiler/Weft.Compiler.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Weft.Tests/Weft.Tests.csproj" />
+  </Folder>
+</Solution>

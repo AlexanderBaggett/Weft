@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>weft</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Weft.Compiler/Weft.Compiler.csproj" />
+    <ProjectReference Include="../Weft.Backend.DotNet/Weft.Backend.DotNet.csproj" />
+    <ProjectReference Include="../Weft.Backend.Jvm/Weft.Backend.Jvm.csproj" />
+    <PackageReference Include="Tomlyn" Version="0.19.0" />
+  </ItemGroup>
+</Project>

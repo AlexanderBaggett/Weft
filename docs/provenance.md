@@ -15,8 +15,10 @@ string from Http via UserService    // entered via Http, then passed through Use
 string                              // empty provenance — matches no `from` pattern
 ```
 
-Provenance is part of the type. `string from Http` is assignable to `string`?
-**No.** A tagged value cannot be silently untagged; only a `transform` discharges a tag.
+Provenance is a compiler refinement of the nominal type. Assigning `string from Http`
+to an inferred `string` local retains its Http refinement; the annotation cannot erase
+it. A contract explicitly requiring empty provenance rejects that flow. Only a
+`transform` discharges a tag. See [decision 0001](decisions/0001-phase-1-semantics.md).
 The reverse is fine: `string` is assignable to a parameter declared `string from Http`
 only if the parameter is written `string from ?Http` (optional provenance). Most code
 never writes provenance in signatures; it is inferred.
@@ -52,9 +54,9 @@ A value acquires an origin when it:
 | Assignment, parameter passing, return | unchanged |
 | `a + b`, `$"{a}{b}"` (strings) | union of `a` and `b` |
 | `a.Field` | provenance of `a` (fields inherit) |
-| `a.Length`, `a.Count`, other scalar derivations | **open** — see [open-questions.md](open-questions.md) |
+| `a.Length`, `a.Count`, other scalar derivations | retain source provenance until an explicit transform discharges it |
 | `List<T from X>` | element provenance is preserved; the list itself is untagged |
-| `T from X` → `T from X via S` | on crossing service `S` |
+| `T from X` → `T from X via S` | add `S` to the crossed-service set for root `X` |
 | Lambda capture | captured values keep their provenance inside the lambda |
 
 Propagation is flow-insensitive within a method body and sound: if the compiler cannot

@@ -1,0 +1,14 @@
+{
+  "id": "duplicate",
+  "sources": {
+    "main.weft": "void Main() {}\nvoid Main() {}"
+  },
+  "diagnostics": [
+    {
+      "code": "WF2002",
+      "file": "main.weft",
+      "line": 2,
+      "column": 1
+    }
+  ]
+}

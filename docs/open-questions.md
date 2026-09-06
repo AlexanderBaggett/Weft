@@ -4,20 +4,15 @@ Decisions not yet made, roughly in order of how much they constrain everything e
 
 ## Provenance
 
-1. **Scalar derivations.** Does `req.User.Length` carry `from Http`? Probably not for
-   `int`, probably yes for `Substring`. Need a rule: provenance propagates through
-   operations that return the same *kind* of data (string→string, bytes→bytes) and
-   drops through projections to a different kind. Verify this doesn't create a laundering
-   hole (`Encode` → `Decode`).
-2. **Containers.** `List<string from Http>` vs `List<string>` — are they distinct types,
-   or is element provenance a refinement the compiler tracks separately from the nominal
-   type? The latter is friendlier; the former is simpler to implement.
-3. **Inference at signatures.** Is provenance inferred across method boundaries within a
-   module (whole-program) or must it be annotated at every public signature? Leaning:
-   inferred within a module, required at `exposes` contracts.
-4. **`via` fidelity.** How deep is the chain kept? Full chains are expensive and rarely
-   matched on. Proposal: keep the root origin and the *set* of services crossed, not the
-   ordered path.
+1. **Resolved — scalar derivations:** retain provenance until explicit transform,
+   including `req.User.Length` and encode/decode flows.
+2. **Resolved — containers:** compiler refinements include element provenance,
+   separately from the nominal type.
+3. **Resolved — signatures:** infer within a project; exposed contracts carry explicit
+   provenance/effect summaries. Unknown external/indirect flows need contracts.
+4. **Resolved — `via`:** keep roots and crossed-service sets, separate transform lineage,
+   and a conservative hop summary if hop predicates are used. See accepted
+   [decision 0001](decisions/0001-phase-1-semantics.md).
 
 ## Rules
 
@@ -36,20 +31,20 @@ Decisions not yet made, roughly in order of how much they constrain everything e
 
 8. **Graph size.** Path enumeration is exponential in branching depth. Real graphs are
    shallow; still need a bound and a diagnostic.
-9. **Hot reload.** Is the graph static per build, or can `next` branch on config? If
-   config, path proofs must consider all config values — probably restrict branching to
-   `msg`.
-10. **Per-module pipelines.** How do two modules each declaring `pipeline` merge? Proposal:
-    they don't — one `pipeline` per project; modules contribute nodes, not entries.
+9. **Resolved — configurable routing.** The possible connections are fixed per build;
+   routing may read configuration through a message snapshot. Checks cover every
+   allowed target and configuration state. See decision 0002 section D.
+10. **Resolved — middleware across projects.** The consuming project explicitly selects
+    and connects shared nodes or adopts a shared pipeline in a source file. References
+    never activate or merge pipelines, even when the API has no middleware of its own.
+    See [project pipeline contracts](contracts/project-pipelines.md).
 
 ## Origins
 
-11. **Custom address grammars.** What is the language for `address topic: string, qos: 0..2`?
-    Parameter lists with refinement types is probably enough; anything richer becomes
-    a parser-generator.
-12. **Origins as values.** Can code branch on `msg.Origin` at runtime, or is it
-    compile-time only (via `from` refinement)? Leaning: runtime-readable but refinement
-    is the preferred style.
+11. **Resolved — custom address declarations.** Typed named parameters with range/enum
+    refinements; adapters implement the protocol parsing. See decision 0002 section D.
+12. **Resolved — origins as values.** `msg.Origin` is runtime-readable; the compiler's
+    origin checks determine which envelope members are accessible.
 
 ## Services and lifetimes
 
@@ -92,3 +87,15 @@ Decisions not yet made, roughly in order of how much they constrain everything e
 23. **Rules files vs inline.** Should `rule` be allowed in `.weft` files? Leaning no:
     rules apply by scope, and finding them is easier when they're in one place.
 24. **Name.** "Weft" is a working name.
+
+## Foundation decision records
+
+[Decision 0001](decisions/0001-phase-1-semantics.md) also settles lazy replacement,
+precedence/forbids, response preparation/unwind, child joining, and Task combinators.
+[Decision 0002](decisions/0002-ordinary-and-portable-contracts.md) records the accepted
+C# ordinary-value default, broader numeric support, and explicit middleware connections
+between projects. Hosted CI is deferred to Phase 6; it is not an outstanding permission
+request. The foundational decisions are resolved. Open details
+needed before later feature implementations include the transport-completion hook,
+cleanup I/O budget spelling, graph-proof limits, shadow-provider semantics, and effect
+classification/transaction/stream-retry policy. They remain in release scope.

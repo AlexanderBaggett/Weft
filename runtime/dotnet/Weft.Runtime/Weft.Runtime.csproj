@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Weft.Runtime</PackageId>
+    <Description>The .NET implementation of the Weft runtime contract.</Description>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,18 @@
+namespace Demo;
+
+public static class Program
+{
+    private static int Mark(string label, int value)
+    {
+        Print(label);
+        return value;
+    }
+
+    public static void Main()
+    {
+        var total = OrderMath.Total(
+            unitPrice: Mark("price first", 25),
+            units: Mark("units second", 2));
+        Print("Total: " + total);
+    }
+}

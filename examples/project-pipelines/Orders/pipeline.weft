@@ -1,0 +1,13 @@
+// Design example: explicitly combine shared and local middleware.
+use pipeline Shared.Web as Common;
+
+middleware OrderAudit
+{
+    effect Audit.Request(msg.Address);
+    next continue;
+}
+
+pipeline Main entry match
+{
+    Http => Common.Http -> OrderAudit -> Route;
+}

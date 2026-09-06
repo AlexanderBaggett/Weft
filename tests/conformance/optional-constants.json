@@ -1,0 +1,8 @@
+{
+  "id": "optional-constants",
+  "entry": "Main",
+  "sources": {
+    "main.weft": "string Decorate(string text = \"a\" + \"b\", bool enabled = !false, int offset = -2147483648, long maximum = 9223372036854775807L) {\n    return text + \":\" + enabled + \":\" + offset + \":\" + maximum;\n}\nvoid Main() { Print(Decorate()); Print(Decorate(maximum: 7, text: \"custom\", offset: 2, enabled: false)); }"
+  },
+  "stdout": "ab:true:-2147483648:9223372036854775807\ncustom:false:2:7\n"
+}

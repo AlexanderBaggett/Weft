@@ -1,7 +1,10 @@
 # Grammar sketch
 
-EBNF-ish, declarations only. Expressions, statements, and types follow C# closely and
-are omitted. `?` optional, `*` zero or more, `+` one or more, `|` alternation.
+EBNF-ish language design, with the reconciled declaration/block inventory below.
+Ordinary expressions/statements follow the C#-adjacent contracts recorded in
+[decision 0002](decisions/0002-ordinary-and-portable-contracts.md). `?` optional,
+`*` zero or more, `+` one or more, `|` alternation. This describes the complete release;
+the executable foundation subset is identified at the end.
 
 ```ebnf
 compilation-unit  = { declaration } ;
@@ -13,13 +16,16 @@ declaration       = origin-decl | model-decl | service-decl | receiver-decl
                   | ambient-decl | address-decl | table-decl
                   | flag-decl | canary-decl | kill-decl | switch-group-decl
                   | scope-directive | use-directive
-                  | class-decl | function-decl ;               (* ordinary code *)
+                  | cache-decl | outcome-decl
+                  | namespace-decl | extern-decl
+                  | class-decl | record-decl | interface-decl | type-decl
+                  | function-decl ;                            (* ordinary code *)
 
 (* ---------- provenance ---------- *)
 
 provenance        = "from" origin-pattern ;
 origin-pattern    = origin-term { "|" origin-term } [ "only" ] ;
-origin-term       = ident { "via" ident } | "*" ;
+origin-term       = [ "?" ] ident { "via" ident } | "*" ;
 typed             = type [ provenance ] ;                       (* e.g. string from Http *)
 
 (* ---------- origins ---------- *)
@@ -28,7 +34,7 @@ origin-decl       = "origin" ident [ ":" "adapter" ident ] ( ";" | origin-body )
 origin-body       = "{" { origin-member } "}" ;
 origin-member     = "address"  address-grammar ";"
                   | "envelope" "{" { field } "}"
-                  | "outcomes" "{" { outcome-map } "}"
+                  | "outcomes" [ "match" ] "{" { outcome-map } "}"
                   | "provides" ident-list ";"
                   | "carries"  ident-list ";" ;
 outcome-map       = ( "respond" | outcome | "*" ) "=>" action ";" ;
@@ -57,7 +63,7 @@ address           = ident "." ident [ "(" arg-list ")" ] [ "." ident ]   (* Http
 
 (* ---------- rule vocabulary ---------- *)
 
-transform-decl    = "transform" ident "(" typed ident ")" "->" type ";" ;
+transform-decl    = "transform" ident "(" typed [ ident ] ")" "->" type ( ";" | block ) ;
 validate-decl     = "validate"  ident "(" param-list ")" ";" ;
 sink-decl         = "sink" ident "=" qualified-ident { "," qualified-ident } ";" ;   (* a named set of points *)
 filter-decl       = "filter" ident "=" filter-expr ";" ;                            (* a named, reusable filter *)
@@ -66,12 +72,12 @@ filter-decl       = "filter" ident "=" filter-expr ";" ;                        
 
 scope-clause      = "scope" scope-expr ";" ;
 scope-expr        = scope-term { "," scope-term } ;
-scope-term        = "project"
-                  | "module"    ident
+scope-term        = "project" [ ident ]
                   | "namespace" qualified-ident
                   | "type"      qualified-ident
                   | "method"    qualified-ident
                   | "receiver"  qualified-ident [ ".*" ]
+                  | qualified-ident [ ".*" ]                 (* inherited scope kind in a list *)
                   | [ "!" ] "flag" ident ;
 scope-directive   = scope-clause ;                               (* file-level default *)
 
@@ -83,7 +89,7 @@ rule-decl         = [ "static" ] "rule" ident "{"
                     [ scope-clause ] rule-target { filter-clause } [ priority-clause ]
                     effect-clause { effect-clause } "}" ;
 
-rule-target       = "target" typed [ "in" "{" ident-list "}" ] ";"
+rule-target       = "target" ( typed | "*" [ provenance ] ) [ "in" "{" ident-list "}" ] ";"
                   | "target" qualified-ident [ provenance ] ";" ;           (* Model.Field *)
 
 filter-clause     = "filter" filter-expr ";" ;                   (* several lines AND together *)
@@ -114,14 +120,15 @@ point             = "bind"
                   | "after" qualified-ident
                   | "cross" [ ( "into" | "out" "of" ) ( qualified-ident | glob ) ]
                   | ident ;                                       (* a sink set *)
-action            = call                                          (* replaces if same type, observes if void; `_` = value *)
+action            = qualified-ident | call                        (* shorthand function or explicit arguments; `_` = value *)
                   | "require" call "else" ( "reject" outcome [ expression ] | "throw" type )
                   | "forbid"
                   | "(" ident ")" block ;                          (* return replaces; none observes; reject allowed *)
 
 ruleset-decl      = "ruleset" ident "{" { filter-decl | rule-decl | trigger-decl } "}" ;
 suppress-decl     = "suppress" [ "ruleset" ] ident "in" scope-expr ";" ;
-use-directive     = "use" "ruleset" ident ";" ;
+use-directive     = "use" "ruleset" ident ";"
+                  | "use" ( "middleware" | "pipeline" ) qualified-ident "as" ident ";" ;
 
 (* ---------- triggers ---------- *)
 
@@ -135,7 +142,7 @@ trigger-effect    = "on" ( "enter" | "exit" | "throw" ) "=>" ( expression | bloc
 
 (* ---------- middleware ---------- *)
 
-middleware-decl   = "middleware" ident [ generic-params ] { mw-clause }
+middleware-decl   = [ visibility ] "middleware" ident [ generic-params ] { mw-clause }
                     "{" [ scope-clause ] [ "filter" expression ";" ] [ "guard" ( "match" match-block | block ) ]
                         [ "effect" block-or-stmts ]
                         [ "after" block-or-stmts ] next-clause "}" ;
@@ -145,15 +152,23 @@ mw-clause         = "from"     ident-list
                   | "reentrant" "(" "max" ":" integer ")" ;
 match-block       = "{" { expression "=>" verdict-or-target ";" } [ "else" "=>" verdict-or-target ";" ] "}" ;
 verdict-or-target = "approve" | "reject" outcome [ expression ] | next-target ;
-next-clause       = "next" ( next-target ";" | "match" match-block | block ) ;   (* block must `return` a next-target *)
-next-target       = ident                                        (* another node *)
+next-clause       = "next" ( next-target ";" | "match" [ "(" expression ")" ] match-block | block ) ;
+                                                                    (* block must return a next-target *)
+next-target       = qualified-ident                              (* node or pipeline origin entry *)
                   | "any" expression "else" terminal
                   | ident "[" expression "]" "else" terminal        (* table lookup *)
                   | "Route"
+                  | "continue"                                 (* declared pipeline connection *)
                   | "respond" [ outcome ] [ expression ]
                   | "reject"  outcome [ expression ] ;
 
-pipeline-decl     = "pipeline" ident "entry" "{" { ident "=>" ident ";" } "}" ;
+pipeline-decl     = [ visibility ] "pipeline" ident
+                    ( "entry" [ "match" ] "{" { ident "=>" pipeline-path ";" } "}"
+                    | "=" qualified-ident ";" ) ;
+pipeline-path     = next-target { "->" next-target } ;
+visibility        = "public" | "internal" | "private" ;
+(* Each arrow binds a declared continuation; concrete internal edges are not replaced.
+   References and assembly/jar packaging live in weft.toml, not nested source projects. *)
 
 (* ---------- ambients ---------- *)
 
@@ -203,6 +218,36 @@ switch-group-decl = "switch" "group" ident "{" ident-list "}" ;
 
 (* ---------- misc ---------- *)
 
+namespace-decl   = "namespace" qualified-ident ( ";" | "{" { declaration } "}" ) ;
+extern-decl      = "extern" ( "dotnet" | "jvm" ) extern-binding ;
+outcome-decl     = "outcome" ident [ "(" param-list ")" ] ";" ;
+type-decl        = "type" ident "=" type ";" ;
+
+cache-decl       = "cache" ident "{"
+                   [ scope-clause ]
+                   "target" ( "boundary" "service" qualified-ident | "Http.Send" ) ";"
+                   { filter-clause } [ "key" expression ";" ] [ "ttl" duration ";" ]
+                   "effect" cache-effect { cache-effect } "}" ;
+cache-effect     = "invalidate" "on" call { "," call } "by" expression ";"
+                 | "ignore" call ";" ;
+
+block            = "{" { statement } "}" ;
+block-or-stmts   = block | statement { statement } ;
+statement        = ordinary-statement | effect-scope | terminal ";"
+                 | "approve" ";" ;
+terminal         = "Route" | "respond" [ outcome ] [ expression ]
+                 | "reject" outcome [ expression ] ;
+effect-scope     = "transaction" block
+                 | "deadline" duration block
+                 | "retry" "(" expression [ "," "backoff" ":" expression ] ")" block
+                 | "saga" "{" { saga-step } "}" ;
+saga-step        = "step" expression ( "compensate" expression | "final" ) ";" ;
+classification   = "pure" | "idempotent" | "external" ;
+
+(* Ordinary class/record/interface/member/expression forms are completed against the
+   ordinary-language contract, not delegated to Roslyn or javac for Weft semantics.
+   extern-binding specifies paired host bodies plus one shared Weft contract. *)
+
 outcome           = ident ;
 ident-list        = ident { "," ident } ;
 qualified-ident   = ident { "." ident } ;
@@ -224,3 +269,75 @@ retire when sticky shadow static unreachable
 ```
 
 Contextual where possible (`from`, `on`, `after`, `mode`) to keep C# code portable.
+
+## Reconciliations and contextual validity
+
+- Both `pipeline Main entry match { ... }` and the shorter `entry { ... }` retain the
+  examples' meaning. `outcomes match` and `next match (subject)` are included explicitly.
+- A transform vocabulary signature may omit the input parameter name, as the existing
+  examples do. Suppression/use/file scope and declarations inside rulesets are retained.
+- `cache` and transaction/deadline/retry/saga blocks are part of the inventory. Member
+  classification, transactional service participation, compensation finality, and
+  guard/next/after contexts are checked by their owning semantic passes.
+- Rule and trigger declarations are allowed in both `.rules` and `.weft`; extension
+  does not change precedence or visibility. How an application connects middleware
+  from different projects is explicit and user-controlled under decision 0002 section C.
+  The complete grammar represents use/extern/outcome forms
+  before those passes are executable; their detailed public-contract syntax remains
+  a tracked design task for the owning phase.
+- Custom address grammar is typed named parameters plus refinements per decision 0002.
+  Origin callbacks use generated adapter contracts. Typed topics/channels remain
+  separate from HTTP route declarations.
+- `byte[]` uses the unsigned 8-bit ordinary type under the accepted C# numeric direction.
+  `LengthPrefix<u32>` in origin sketches denotes a wire-format descriptor whose value
+  width corresponds to `uint32`; byte order and framing stay explicit adapter concerns.
+  The earlier four-number-type restriction is superseded by the
+  [numeric contract](contracts/numeric-types.md). Library descriptor names remain
+  Phase 2/5 work.
+- Rate/statistical predicates belong to switch judges/tripwires, not value filters.
+  `guard` paths require approve/reject; `next` paths require a node/terminal; ordinary
+  `match` is an expression. Parsing a balanced block cannot establish these proofs.
+
+## Current executable grammar
+
+The parser gives ordinary functions and static method containers typed syntax nodes.
+Other declared
+construct kinds retain their header and balanced token-group body plus the complete
+source text. Contextual keywords remain identifier tokens; declaration and block
+contexts decide their meaning. The binder emits WF2009 for unimplemented semantic
+passes, so balanced sketches never appear to have passed policy checking.
+
+```ebnf
+foundation-unit = { namespace-decl | foundation-function | static-helper-class | structural-declaration } ;
+static-helper-class = { modifier } "static" "class" ident "{" { foundation-function } "}" ;
+foundation-function = { modifier } type ident "(" [ parameter { "," parameter } ] ")"
+                      ( foundation-block | "=>" expression ";" | ";" ) ;
+parameter       = type ident [ "=" constant-expression ] ;
+argument        = [ ident ":" ] expression ;
+foundation-block = "{" { foundation-statement } "}" ;
+foundation-statement = foundation-block
+                     | ( "var" | type ) ident "=" expression ";"
+                     | "return" [ expression ] ";"
+                     | "if" "(" expression ")" foundation-statement [ "else" foundation-statement ]
+                     | "while" "(" expression ")" foundation-statement
+                     | expression ";" | structural-effect-scope ;
+expression      = literal | qualified-ident | "(" expression ")"
+                | ( "!" | "-" | "+" ) expression
+                | expression binary-op expression
+                | expression "(" [ argument { "," argument } ] ")" ;
+binary-op       = "=" | "||" | "&&" | "==" | "!=" | "<" | ">" | "<=" | ">="
+                | "+" | "-" | "*" | "/" | "%" ;
+```
+
+Precedence from lowest to highest is assignment (right associative), OR, AND, equality,
+comparison, addition/subtraction, multiplication/division/remainder, unary, member/call.
+Currently executable types are void (return only), bool, int32/int, int64/long, string.
+Numeric literals are decimal signed integer magnitudes with optional L suffix and
+underscores; minimum signed values are accepted through unary negation. The parser
+also represents generic/array/nullable type syntax; those forms and interpolation
+execution remain required Phase 2 work. This checkpoint is not first-release scope.
+
+Functions and static methods support overloads, public/internal/private checks, named
+and optional arguments, and int32-to-int64 widening. See the
+[function contract](contracts/functions.md) for scope and current limitations. Project
+pipeline syntax is accepted; its graph execution remains Phase 3/6 work.

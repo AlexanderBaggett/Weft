@@ -1,0 +1,8 @@
+{
+  "id": "strings",
+  "sources": {
+    "main.weft": "string Same(string x) => x + \"\"; void Main() { Print(\"a\" == Same(\"a\")); Print(\"b\" != Same(\"a\")); Print(\"Weft: \" + true + \" \" + 42); Print(\"héllo ☺ 😀\"); Print(\"quote=\\\" slash=\\\\\"); }"
+  },
+  "stdout": "true\ntrue\nWeft: true 42\nhéllo ☺ 😀\nquote=\" slash=\\\n",
+  "exitCode": 0
+}

@@ -1,0 +1,9 @@
+{
+  "id": "namespaces",
+  "entry": "App.Main",
+  "sources": {
+    "main.weft": "namespace App; void Main() { Print(Library.Twice(9)); }",
+    "lib.weft": "namespace Library { int Twice(int x) => x * 2; }"
+  },
+  "stdout": "18\n"
+}

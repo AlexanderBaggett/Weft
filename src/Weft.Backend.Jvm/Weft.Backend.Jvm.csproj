@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Weft.Compiler/Weft.Compiler.csproj" />
+    <Content Include="../../runtime/jvm/src/**/*.java" Link="runtime/jvm/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

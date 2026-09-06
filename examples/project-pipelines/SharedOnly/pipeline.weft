@@ -1,0 +1,3 @@
+// Design example: this API has no local middleware, but still opts in explicitly.
+use pipeline Shared.Default as Common;
+pipeline Main = Common;

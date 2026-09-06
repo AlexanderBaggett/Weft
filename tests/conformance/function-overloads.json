@@ -1,0 +1,8 @@
+{
+  "id": "function-overloads",
+  "entry": "Main",
+  "sources": {
+    "main.weft": "string Kind(int value) => \"int\";\nstring Kind(long value) => \"long\";\nstring Kind(bool value) => \"bool\";\nstring Choose(int value) => \"exact\";\nstring Choose(int value, int extra = 0) => \"optional\";\nlong Widen() => 12;\nvoid Main(int unused) { Print(\"wrong entry\"); }\nvoid Main() {\n    Print(Kind(1)); Print(Kind(1L)); Print(Kind(true));\n    Print(Choose(1)); Print(Choose(1, 2));\n    long value = 3; value = 4; Print(value + 5); Print(Widen());\n}"
+  },
+  "stdout": "int\nlong\nbool\nexact\noptional\n9\n12\n"
+}

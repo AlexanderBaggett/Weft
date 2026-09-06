@@ -5,7 +5,15 @@
 A web-tier language where cross-cutting concerns are first-class and compiler-checked.
 Fast, garbage-collected, C#-adjacent syntax. Not a systems language.
 
-**Status:** design sketch. No compiler yet. See [docs/open-questions.md](docs/open-questions.md).
+**Status:** Phase 1 compiler foundation complete; Phase 2 is in progress. Ordinary programs compile and run
+on .NET and JVM; the cross-cutting language remains required implementation work.
+See [development](docs/development.md) to build/run the foundation and
+[open questions](docs/open-questions.md) for remaining design choices.
+
+**Release direction:** the first release covers the full language design on both .NET
+and JVM, including additions accepted during development. The user leads language
+design; AI leads implementation and engineering. The [roadmap](docs/roadmap.md) evolves
+with the design, and the [feature register](docs/feature-status.md) tracks completion.
 
 ## The idea
 
@@ -73,6 +81,16 @@ switches qualify.
 | Doc | What it covers |
 |---|---|
 | [overview](docs/overview.md) | **Start here.** The whole design on one page — one sketch per construct |
+| [compiler](docs/compiler.md) | Shared compiler and IR, .NET/JVM backends, runtime contracts |
+| [numeric types](docs/contracts/numeric-types.md) | Common C#/Java types, C# decimal behavior, and portable runtime support |
+| [functions and methods](docs/contracts/functions.md) | Executable overloads, named/optional arguments, static helpers, visibility, and current limits |
+| [sharing middleware](docs/contracts/project-pipelines.md) | Explicit node connections and pipeline adoption across projects and DLL/jar boundaries |
+| [roadmap](docs/roadmap.md) | AI engineering workflow, evolving milestones, and full-release criteria |
+| [feature register](docs/feature-status.md) | Complete first-release inventory and implementation tracking |
+| [implementation phases](docs/phases/README.md) | Seven phase folders with task checklists, dependencies, and feature ownership |
+| [development](docs/development.md) | Prerequisites, compiler components, manifest, CLI, and verification |
+| [acceptance map](docs/acceptance/README.md) | Full-release programs, diagnostics, failures, and feature interactions |
+| [design decisions](docs/decisions/README.md) | Accepted contracts and proposals awaiting the designer |
 | [provenance](docs/provenance.md) | Origins as type tags, propagation, discharge |
 | [rules](docs/rules.md) | Value-targeted rules: sinks, transforms, effects, precedence |
 | [triggers](docs/triggers.md) | Point-targeted rules: method and service boundaries |
@@ -87,5 +105,6 @@ switches qualify.
 | [grammar](docs/grammar.md) | EBNF sketch |
 | [open-questions](docs/open-questions.md) | Decisions not yet made |
 
-Worked examples: [examples/orders.weft](examples/orders.weft),
+Runnable foundation: [examples/foundation](examples/foundation/main.weft).
+Full-language design sketches: [examples/orders.weft](examples/orders.weft),
 [examples/input.rules](examples/input.rules), [examples/switches.weft](examples/switches.weft).

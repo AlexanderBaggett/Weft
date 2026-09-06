@@ -1,4 +1,8 @@
-bin/
-obj/
+**/bin/
+**/obj/
+artifacts/
+.weft/
+TestResults/
+*.user
 target/
 .vscode/

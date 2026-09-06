@@ -1,0 +1,14 @@
+{
+  "id": "unknown",
+  "sources": {
+    "main.weft": "void Main() { Missing(); }"
+  },
+  "diagnostics": [
+    {
+      "code": "WF2001",
+      "file": "main.weft",
+      "line": 1,
+      "column": 15
+    }
+  ]
+}

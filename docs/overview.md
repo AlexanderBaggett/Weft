@@ -14,7 +14,7 @@ stdlib. Only things the compiler must *know about* to check or rewrite programs 
 
 Everything cross-cutting has: **scope · target · filter · effect**.
 
-- `scope` — where it applies. Omitted = project. `module X`, `namespace X`, `type X`,
+- `scope` — where it applies. Omitted = project. `project X`, `namespace X`, `type X`,
   `method X.Y`, `receiver X`, `receiver X.*`, `flag X`, `!flag X`.
 - `target` — what it attaches to. This is what differs between constructs.
 - `filter` — narrows a match. Optional.
@@ -438,7 +438,7 @@ Consequences:
 ```
 *.weft      — models, services, receivers, middleware, pipelines, ordinary code
 *.rules     — rules and triggers; may set a file-level scope
-weft.toml   — project manifest: modules, origin adapters, rulesets in use
+weft.toml   — project manifest: project references, origin adapters, rulesets in use
 ```
 
 Rules files are discovered by the project, not imported by source files. A rule's

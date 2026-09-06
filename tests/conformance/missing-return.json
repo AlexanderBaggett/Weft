@@ -1,0 +1,14 @@
+{
+  "id": "missing-return",
+  "sources": {
+    "main.weft": "int Main() { var x = 1; }"
+  },
+  "diagnostics": [
+    {
+      "code": "WF2007",
+      "file": "main.weft",
+      "line": 1,
+      "column": 1
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "static-methods",
+  "entry": "App.Program.Main",
+  "sources": {
+    "main.weft": "namespace App;\npublic static class Program {\n    private static int Double(int value) => value * 2;\n    public static void Main(int unused) { Print(\"wrong entry\"); }\n    public static void Main() {\n        Print(Double(3)); Print(Pricing.Prices.Total(count: 4));\n        Print(Pricing.Prices.Total(2, fee: 7));\n    }\n}",
+    "prices.weft": "namespace Pricing {\n    public static class Prices {\n        private static long Rate(int count) => count * 10;\n        public static long Total(int count, long fee = 2 + 3) => Rate(count) + fee;\n    }\n}"
+  },
+  "stdout": "6\n45\n27\n"
+}

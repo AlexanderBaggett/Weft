@@ -1,0 +1,8 @@
+{
+  "id": "function-resolution",
+  "entry": "App.Main",
+  "sources": {
+    "main.weft": "void Print(string value) { Log(\"user: \" + value); }\nnamespace App { void Log(string value) { Print(value); } void Main() { Log(\"hello\"); } }"
+  },
+  "stdout": "user: hello\n"
+}

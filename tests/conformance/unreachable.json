@@ -1,0 +1,14 @@
+{
+  "id": "unreachable",
+  "sources": {
+    "main.weft": "void Main() { return; Print(1); }"
+  },
+  "diagnostics": [
+    {
+      "code": "WF2010",
+      "file": "main.weft",
+      "line": 1,
+      "column": 23
+    }
+  ]
+}

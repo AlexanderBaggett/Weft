@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Weft.Compiler/Weft.Compiler.csproj" />
+    <ProjectReference Include="../../runtime/dotnet/Weft.Runtime/Weft.Runtime.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+  </ItemGroup>
+</Project>

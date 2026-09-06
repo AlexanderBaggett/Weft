@@ -1,0 +1,8 @@
+{
+  "id": "hello",
+  "sources": {
+    "main.weft": "void Main() { Print(\"hello, Weft\"); }"
+  },
+  "stdout": "hello, Weft\n",
+  "exitCode": 0
+}

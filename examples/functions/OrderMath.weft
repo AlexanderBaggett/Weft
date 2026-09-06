@@ -1,0 +1,9 @@
+namespace Demo;
+
+public static class OrderMath
+{
+    public static long Total(int units, long unitPrice, long shipping = 0)
+    {
+        return units * unitPrice + shipping;
+    }
+}

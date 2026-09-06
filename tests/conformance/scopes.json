@@ -1,0 +1,8 @@
+{
+  "id": "scopes",
+  "sources": {
+    "main.weft": "void Main() { var next = 1; { var next = 2; Print(next); } Print(next); if (next == 1) Print(\"yes\"); else Print(\"no\"); while (false) Print(\"never\"); }"
+  },
+  "stdout": "2\n1\nyes\n",
+  "exitCode": 0
+}

@@ -76,6 +76,12 @@ actually taken. Has access to `msg` and `msg.Response`. This is how the graph st
 nests for cross-cutting concerns (timing, response headers, compression) without being
 linear.
 
+`after` runs during response preparation, before the adapter commits the response.
+An entered effect registers its after even if it later fails; a bypass or rejected
+guard does not. Cleanup must handle absent successful responses. Streaming retains
+its scope through actual completion/abort. The full failure, joining, and disposal
+order is specified in [message lifecycle](contracts/message-lifecycle.md).
+
 ### `next`
 
 Single, match, code, or terminal.
@@ -126,7 +132,9 @@ auth*, on any transport.
 
 ## `pipeline`
 
-Declares entry points per origin. One pipeline per project (or per module, merged).
+Declares entry points per origin. An executable project explicitly selects one active
+pipeline. Library projects may export reusable nodes and named pipelines; referencing
+their assembly or jar never activates or merges middleware automatically.
 
 ```csharp
 pipeline Main entry match
@@ -141,6 +149,33 @@ pipeline Main entry match
 ```
 
 An origin with receivers but no pipeline entry is an error.
+
+### Share middleware between projects
+
+```csharp
+use middleware Shared.Logging as Logging;
+use middleware Shared.Auth as Auth;
+
+pipeline Main entry match
+{
+    Http => Logging -> Auth -> OrderAudit -> Route;
+}
+```
+
+Reusable nodes use `next continue;` for the connection the consuming project supplies.
+Arrows connect those exits explicitly; they do not override a node's existing internal
+routing. `OrderAudit` can be local to the API project.
+
+Even an application with no middleware of its own explicitly adopts a shared pipeline:
+
+```csharp
+use pipeline Shared.Default as Common;
+pipeline Main = Common;
+```
+
+See [project pipeline contracts](contracts/project-pipelines.md) for exported fragments,
+origin selection, whole-pipeline adoption, and checks across DLL/jar boundaries. These
+are design syntax and Phase 3/6 implementation work.
 
 ## Static graph, dynamic routing
 

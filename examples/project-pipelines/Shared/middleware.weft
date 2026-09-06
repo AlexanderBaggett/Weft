@@ -1,0 +1,17 @@
+// Design example: shared library project. Graph execution is Phase 3 work.
+public middleware Logging
+{
+    effect Log.Request(msg.Address);
+    after Log.Response(msg.Response);
+    next continue;
+}
+
+public pipeline Web entry match
+{
+    Http => Logging -> continue;
+}
+
+public pipeline Default entry match
+{
+    Http => Logging -> Route;
+}

@@ -1,0 +1,8 @@
+{
+  "id": "named-arguments",
+  "entry": "Main",
+  "sources": {
+    "main.weft": "int Mark(int value) { Print(\"mark \" + value); return value; }\nlong Join(long first, int second, long third = 30) => first * 100 + second * 10 + third;\nvoid Show(int first, int second) { Print(first * 10 + second); }\nvoid Main() {\n    Print(Join(second: Mark(2), first: Mark(1)));\n    Show(second: Mark(4), first: Mark(3));\n    Print(Join(first: Mark(5), Mark(6), third: Mark(7)));\n    var value = 0;\n    Print(Join(second: value = 1, first: value = value + 1));\n    Print(value);\n}"
+  },
+  "stdout": "mark 2\nmark 1\n150\nmark 4\nmark 3\n34\nmark 5\nmark 6\nmark 7\n567\n240\n2\n"
+}
