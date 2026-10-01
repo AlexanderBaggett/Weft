@@ -4,7 +4,8 @@ This executable Phase 2 checkpoint implements ordinary classes, instance fields,
 constructors, and instance methods on .NET and JVM. It follows the reference/aliasing
 and C# evaluation direction accepted in [decision 0002](../decisions/0002-ordinary-and-portable-contracts.md).
 The [classes example](../../examples/classes/Program.weft) runs on both targets.
-Models, records, properties, and the other object features listed below remain required
+[Instance properties](properties.md) are also executable. Models, records, and the other
+object features listed below remain required
 first-release work in P02-001/003/004/006/011.
 
 ## Declarations and values
@@ -116,10 +117,11 @@ returns while traversing function bodies for generated helpers.
 
 ## Remaining object work
 
-Properties/accessors, object initializers, constructor chaining, models, records and
+Object initializers, constructor chaining, models, records and
 record value equality/copying, inheritance/interfaces, nested and generic types,
-nullable references, static fields/type initialization, and callable members remain
-required work. Parsing a property does not execute it: the binder reports WF2009.
+nullable references, static fields/properties and type initialization, init accessors,
+indexers, and callable members remain required work. See [properties](properties.md)
+for currently executable accessor forms.
 Current emitted classes are an implementation detail, not a separately consumable
 assembly/JAR API; public packaging and metadata are tracked in Phase 6. This checkpoint
 does not mark P02-003 or the full ordinary language complete.

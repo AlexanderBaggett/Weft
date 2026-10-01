@@ -1,0 +1,7 @@
+{
+  "id": "property-auto-construction",
+  "sources": {
+    "main.weft": "int Mark(string label, int value) { Print(label); return value; }\nclass Person {\n    public int First = Mark(\"field\", 1);\n    public int Count { get; private set; } = Mark(\"property\", 2);\n    public string Name { get; }\n    public bool Flag { get; set; }\n    public Person(string name) { Print(\"body\"); Name = name; Count += 3; }\n    public void Add() { Count++; }\n    public string Label => Name + \":\" + Count;\n}\nvoid Main() { var p = new Person(\"Ada\"); var alias = p; alias.Add(); Print(p.Label); Print(p.Flag); p.Flag = true; Print(alias.Flag); }\n"
+  },
+  "stdout": "field\nproperty\nbody\nAda:6\nfalse\ntrue\n"
+}

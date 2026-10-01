@@ -7,7 +7,7 @@ using Weft.Compiler.Text;
 
 namespace Weft.Compiler.Semantics;
 
-public sealed record BindResult(IrModule? Module, ImmutableArray<Diagnostic> Diagnostics, ImmutableArray<FunctionSymbol> Functions, ImmutableArray<TypeSymbol> Types);
+public sealed record BindResult(IrModule? Module, ImmutableArray<Diagnostic> Diagnostics, ImmutableArray<FunctionSymbol> Functions, ImmutableArray<TypeSymbol> Types, ImmutableArray<PropertySymbol> Properties = default);
 
 public sealed partial class Binder
 {
@@ -78,7 +78,7 @@ public sealed partial class Binder
             bound.Add(new(symbol, body, new(syntax.Location)));
         }
         var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion, types.Values.Where(t => !t.IsStatic).Select(t => new IrClass(t, fields[t.Name].Select(f => f.Symbol).ToImmutableArray())).ToImmutableArray());
-        return new(module, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray());
+        return new(module, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray(), properties.Values.SelectMany(p => p).ToImmutableArray());
     }
 
     private static string Qualify(string ns, string name) => string.IsNullOrEmpty(ns) ? name : ns + "." + name;
@@ -145,7 +145,9 @@ public sealed partial class Binder
                 return new IrReturn(value, origin);
             case ExpressionStatementSyntax expression:
                 var bound = BindExpression(expression.Expression);
-                if (bound.Type != WeftType.Error && bound is not (IrCall or IrIntrinsic or IrAssign or IrUpdate or IrFieldWrite or IrFieldUpdate or IrSequence)) diagnostics.Error("WF2008", "Only calls, assignments, or increment/decrement operations may be expression statements.", expression.Location);
+                if (bound.Type != WeftType.Error && expression.Expression is not (CallSyntax or NewSyntax or UpdateSyntax or
+                    BinarySyntax { Operator: "=" or "+=" or "-=" or "*=" or "/=" or "%=" }))
+                    diagnostics.Error("WF2008", "Only calls, construction, assignments, or increment/decrement operations may be expression statements.", expression.Location);
                 return new IrExpressionStatement(bound, origin);
             case IfSyntax conditional:
                 var condition = BindExpression(conditional.Condition); Require(WeftType.Bool, condition.Type, condition.Origin.Location);
@@ -237,9 +239,7 @@ public sealed partial class Binder
                 return Error(origin);
             case NewSyntax created: return BindNew(created);
             case MemberSyntax member:
-                var fieldRead = BindField(member);
-                if (fieldRead is not null) { RequireFieldInitialized(fieldRead.Field, fieldRead.Receiver, member.Location); return fieldRead; }
-                return Error(origin);
+                return BindMember(member) is { } selected ? ReadTarget(selected) : Error(origin);
             case NameSyntax { Name: "this" }:
                 if (currentFunction.Receiver is null || bindingFieldInitializer)
                 { diagnostics.Error("WF2020", "this requires an instance method or constructor body.", syntax.Location); return Error(origin); }
@@ -247,8 +247,8 @@ public sealed partial class Binder
             case NameSyntax name:
                 var variable = scope.Lookup(name.Name);
                 if (variable is not null) return new IrRead(variable, origin);
-                var implicitField = BindImplicitField(name.Name, name.Location);
-                if (implicitField is not null) { RequireFieldInitialized(implicitField.Field, implicitField.Receiver, name.Location); return implicitField; }
+                var implicitMember = BindImplicitMember(name.Name, name.Location);
+                if (implicitMember is not null) return ReadTarget(implicitMember);
                 diagnostics.Error("WF2001", $"Unknown variable '{name.Name}'.", name.Location);
                 return Error(origin);
             case UnarySyntax unary:
@@ -373,9 +373,9 @@ public sealed partial class Binder
                 diagnostics.Error("WF2003", $"Local '{local.Name}' has non-callable type '{local.Type.Name}'.", call.Target.Location); return Error(origin);
             }
             if (call.Target is NameSyntax fieldName && currentFunction.ContainingType is { } owner &&
-                fields[owner].FirstOrDefault(f => f.Symbol.Name == fieldName.Name).Symbol is { } field)
+                MemberType(owner, fieldName.Name) is { } memberType)
             {
-                diagnostics.Error("WF2003", $"Field '{field.Name}' has non-callable type '{field.Type.Name}'.", call.Target.Location); return Error(origin);
+                diagnostics.Error("WF2003", $"Member '{fieldName.Name}' has non-callable type '{memberType.Name}'.", call.Target.Location); return Error(origin);
             }
             if (call.Target is MemberSyntax) { group = functions.GetValueOrDefault(fullName) ?? []; foundName = true; }
             else group = FindFunctions(fullName, out foundName);

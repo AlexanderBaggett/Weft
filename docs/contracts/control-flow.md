@@ -53,8 +53,8 @@ and concatenation as ordinary string `+`.
 
 The [C# compound-assignment specification](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/expressions#12224-compound-assignment)
 defines the evaluation order and conversion constraints. Current targets are locals,
-parameters, and ordinary [instance fields](objects.md). Updates to properties and
-indexed elements join their respective object/collection implementations; remaining numeric widths and checked
+parameters, ordinary [instance fields](objects.md), and [properties](properties.md).
+Updates to indexed elements join collection/indexer implementation; remaining numeric widths and checked
 arithmetic remain P02-008. Bitwise/shift/coalescing assignments remain ordinary-expression
 work. No host-language permissive narrowing can change accepted Weft source.
 

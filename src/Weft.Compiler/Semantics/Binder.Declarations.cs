@@ -25,7 +25,7 @@ public sealed partial class Binder
                 var name = Qualify(ns, type.Name);
                 if (!types.TryAdd(name, new(name, type.Location, visibility, type.Modifiers.Contains("static"))) || namespaces.Contains(name))
                     diagnostics.Error("WF2002", $"Duplicate declaration '{name}'.", type.Location);
-                fields.TryAdd(name, []);
+                fields.TryAdd(name, []); properties.TryAdd(name, []);
             }
         }
     }
@@ -72,7 +72,9 @@ public sealed partial class Binder
             }
             if (declaration is PropertySyntax property)
             {
-                diagnostics.Error("WF2009", "Property accessors remain required object-model work.", property.Location); continue;
+                if (owner is not null) DeclareProperty(property, ns, owner);
+                else diagnostics.Error("WF2012", "A property must belong to a class.", property.Location);
+                continue;
             }
             if (declaration is not FunctionSyntax function) continue;
             var visibilityFunction = DeclarationVisibility(function.Modifiers, owner is null ? Visibility.Internal : Visibility.Private, owner is not null, function.Location);
@@ -152,6 +154,13 @@ public sealed partial class Binder
             Exposed(function.ReturnType, function.Location);
             foreach (var parameter in function.Parameters) Exposed(parameter.Type, parameter.Location);
         }
+        foreach (var pair in properties)
+            foreach (var property in pair.Value)
+            {
+                if (fields[pair.Key].Any(f => f.Symbol.Name == property.Name) || functions.ContainsKey(Qualify(pair.Key, property.Name)))
+                    diagnostics.Error("WF2002", $"Property '{property.Name}' conflicts with another member.", property.Location);
+                if (types[pair.Key].Visibility == Visibility.Public && property.Visibility == Visibility.Public) Exposed(property.Type, property.Location);
+            }
         foreach (var pair in fields)
             if (types[pair.Key].Visibility == Visibility.Public)
                 foreach (var (field, _) in pair.Value.Where(f => f.Symbol.Visibility == Visibility.Public)) Exposed(field.Type, field.Location);

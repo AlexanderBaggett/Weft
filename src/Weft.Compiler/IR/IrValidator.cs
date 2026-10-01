@@ -94,7 +94,7 @@ public static class IrValidator
                     break;
                 case IrExpressionStatement expression:
                     Expression(expression.Expression, locals);
-                    if (expression.Expression is not (IrAssign or IrCall or IrIntrinsic or IrUpdate or IrFieldWrite or IrFieldUpdate or IrSequence)) Fail("IR expression statement must be a call, assignment, or increment/decrement operation.", expression.Origin);
+                    if (expression.Expression is not (IrAssign or IrCall or IrIntrinsic or IrUpdate or IrFieldWrite or IrFieldUpdate or IrSequence or IrSetterCall)) Fail("IR expression statement must be a call, assignment, or increment/decrement operation.", expression.Origin);
                     break;
                 case IrIf conditional:
                     Expression(conditional.Condition, locals);
@@ -143,6 +143,11 @@ public static class IrValidator
                     Expression(conditional.Condition, locals); Expression(conditional.WhenTrue, locals); Expression(conditional.WhenFalse, locals);
                     if (conditional.Condition.Type != WeftType.Bool || conditional.WhenTrue.Type != conditional.Type || conditional.WhenFalse.Type != conditional.Type)
                         Fail("IR conditional condition or branch type mismatch.", conditional.Origin);
+                    break;
+                case IrSetterCall setter:
+                    Expression(new IrCall(setter.Setter, [setter.Value], setter.Origin, Receiver: setter.Receiver), locals);
+                    if (setter.Setter.ReturnType != WeftType.Void || setter.Setter.Parameters.Length != 1 || setter.Setter.Receiver is null)
+                        Fail("Invalid IR setter signature.", setter.Origin);
                     break;
                 case IrAllocate allocated:
                     if (allocated.Type.Kind != TypeKind.Nominal || currentFunction?.IsConstructor != true || currentFunction.Receiver?.Type != allocated.Type)

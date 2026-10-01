@@ -16,8 +16,10 @@ public sealed record FunctionSyntax(string FunctionName, TypeSyntax ReturnType, 
     BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false) : DeclarationSyntax(FunctionName, Location);
 public sealed record FieldSyntax(string FieldName, TypeSyntax Type, ExpressionSyntax? Initializer,
     ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(FieldName, Location);
-public sealed record PropertySyntax(string PropertyName, TypeSyntax Type, GroupElement Body,
-    ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(PropertyName, Location);
+public sealed record AccessorSyntax(string Kind, BlockSyntax? Body, ImmutableArray<string> Modifiers,
+    SourceLocation Location) : SyntaxNode(Location);
+public sealed record PropertySyntax(string PropertyName, TypeSyntax Type, ImmutableArray<AccessorSyntax> Accessors,
+    ExpressionSyntax? Initializer, ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(PropertyName, Location);
 
 public enum ConstructKind { Origin, Model, Class, Record, Interface, Service, Receiver, Sink, Transform, Validate, Filter, Rule, Trigger, Ruleset, Suppress, Middleware, Pipeline, Ambient, Topic, Channel, Table, Flag, Canary, Kill, SwitchGroup, Scope, Use, Cache, Type, Extern, Outcome }
 // Lossless token trees retain nested code, match blocks, clauses, and source locations.

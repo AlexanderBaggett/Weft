@@ -1,0 +1,7 @@
+{
+  "id": "property-receiver-capture",
+  "sources": {
+    "main.weft": "class Box { public int Raw; public int Value { get => Raw; set => Raw = value; } }\nint Pair(int first, int second) => first * 10 + second;\nvoid Main() {\n    var a = new Box(); a.Raw = 10; var b = new Box(); b.Raw = 20;\n    var target = a;\n    Print(target.Value += ((target = b).Value = 3)); Print(a.Raw); Print(b.Raw);\n    target = a; Print(target.Value = ((target = b).Value = 7)); Print(a.Raw); Print(b.Raw);\n    Print(a.Value += (b.Value += 2)); Print(a.Raw); Print(b.Raw);\n    Print(Pair(second: a.Value++, first: ++b.Value)); Print(a.Raw); Print(b.Raw);\n}\n"
+  },
+  "stdout": "13\n13\n3\n7\n7\n7\n16\n16\n9\n116\n17\n10\n"
+}

@@ -31,6 +31,9 @@ public sealed record IrBinary(IrExpression Left, string Operator, IrExpression R
 // its destination parameter; default/empty means the identity order.
 public sealed record IrCall(FunctionSymbol Function, ImmutableArray<IrExpression> Arguments, SourceOrigin Origin,
     ImmutableArray<int> ParameterOrder = default, IrExpression? Receiver = null) : IrExpression(Function.ReturnType, Origin);
+// Invoke a void setter exactly once and return the supplied value, not its stored result.
+public sealed record IrSetterCall(FunctionSymbol Setter, IrExpression Receiver, IrExpression Value, SourceOrigin Origin)
+    : IrExpression(Value.Type, Origin);
 public sealed record IrAllocate(WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrFieldRead(FieldSymbol Field, IrExpression Receiver, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
 public sealed record IrFieldWrite(FieldSymbol Field, IrExpression Receiver, IrExpression Value, SourceOrigin Origin) : IrExpression(Field.Type, Origin);

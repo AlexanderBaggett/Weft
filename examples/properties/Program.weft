@@ -1,0 +1,42 @@
+namespace Demo;
+
+public class Inventory
+{
+    public string Sku { get; }
+    public int Stock { get; private set; }
+    private int requested;
+
+    public int Requested
+    {
+        get => requested;
+        set { requested = value < 0 ? 0 : value; }
+    }
+
+    public string Description => Sku + ":" + Stock;
+
+    public Inventory(string sku, int stock)
+    {
+        Sku = sku;
+        Stock = stock;
+    }
+
+    public int Reserve(int units)
+    {
+        var amount = units < Stock ? units : Stock;
+        Stock -= amount;
+        return amount;
+    }
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        var inventory = new Inventory("A", 5);
+        Print(inventory.Description);
+        Print(inventory.Requested = -3);
+        Print(inventory.Requested);
+        Print(inventory.Reserve(2));
+        Print(inventory.Description);
+    }
+}

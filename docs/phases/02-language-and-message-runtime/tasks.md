@@ -143,7 +143,7 @@ Both the control-flow and update-operator checkpoints are pushed to `master`.
 
 ### Ordinary-class checkpoint — 2026-09-30
 
-Worktree based on `6fe0f95`, covering portions of P02-001/003/011/032. Both backends
+Committed and pushed as `acd4b92`, covering portions of P02-001/003/011/032. Both backends
 execute ordinary classes, overloaded constructors, instance/static methods, fields,
 readonly checks, identity equality, and alias mutation. Constructor arguments run
 before ordered field initializers; instance receivers precede written-order arguments.
@@ -170,8 +170,36 @@ See the [object contract](../../contracts/objects.md).
   passes. Grammar, shared IR, and developer documentation preserve the remaining
   release coverage. Hosted CI remains deferred.
 
-**Next:** continue P02-003 with properties, models, records and their specified
-construction/equality behavior. Generic/interface/nullable types and complete public
+### Instance-property checkpoint — 2026-09-30
+
+Worktree based on `acd4b92`, covering further portions of P02-003/011/032. Instance
+properties support automatic storage, custom/expression-bodied accessors, restricted
+accessibility, getter-only constructor assignment, and non-null initialization checks.
+Compound assignment and prefix/postfix updates preserve receiver/getter/RHS/setter
+order. The assignment result remains the supplied value when a setter changes its
+parameter or stored value. Getter calls retain source-level statement restrictions.
+See the [property contract](../../contracts/properties.md) and runnable
+[property example](../../../examples/properties/Program.weft).
+
+- `dotnet test Weft.slnx --no-restore`: **245 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Five new property conformance programs bring the executable case count to 39.
+  Forty-two property binding/IR checks cover invalid access, initialization, signatures,
+  accessor forms, public contracts, source statement forms, and metadata.
+- Independent agent review is complete with no outstanding findings. Additional
+  reviewer programs passed on both runtimes for nested receivers, field/property
+  interactions, named arguments, and 64-bit updates. A source-level statement issue
+  discovered during implementation was fixed and independently verified: a bare
+  property read remains invalid even though it lowers to a getter call.
+- CLI runs of the property example on both backends printed `A:5`, `-3`, `0`, `2`,
+  and `A:3`. Documentation/example review is complete, all 44 Markdown documents have
+  valid relative link targets, and `git diff --check` passes. Hosted CI remains deferred.
+
+Static/init properties, object initializers, indexers, models/records, and remaining
+type features stay required work. No parent task is marked complete by this checkpoint.
+
+**Next:** continue P02-003 with remaining property/construction forms, models, records
+and their specified construction/equality behavior. Generic/interface/nullable types and complete public
 project contracts remain under their original tasks before services and shared
 middleware integration. Preserve the accepted pipeline syntax; its graph/project binding remains
 owned by P03-001 and P06-001/003. Append new work with unused task IDs when scope grows.

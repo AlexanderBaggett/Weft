@@ -8,8 +8,9 @@ below on both backends; tentative semantics remain design work within that scope
 W032–W034 have executable foundation portions; no complete feature is claimed. The
 cross-cutting language, message runtime, and production adapters remain required work.
 The original examples are design sketches; `examples/foundation`, `examples/functions`,
-and `examples/classes` are executable. Phase 2 now supports static helper methods, overloads, named/optional
-arguments, ordinary classes with constructors/fields/instance methods, reference
+`examples/classes`, and `examples/properties` are executable. Phase 2 now supports
+static helper methods, overloads, named/optional arguments, ordinary classes with constructors/fields/instance methods, instance
+properties with accessors and auto-property initialization, reference
 initialization and visibility checks, int32-to-int64 widening, for/do loops,
 break/continue, conditional expressions, and update/compound-assignment operators
 on both backends; see the

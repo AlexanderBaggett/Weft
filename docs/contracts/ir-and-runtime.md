@@ -43,6 +43,14 @@ preserving target capture and old-field reads before right-hand effects. Its loc
 cannot escape the expression in validated IR. Both emitters use typed static sequence
 helpers and method-local temporaries. See the [object contract](objects.md).
 
+Property getters are ordinary receiver calls; `IrSetterCall` invokes a void setter
+and produces the supplied argument value. Typed static assignment helpers preserve
+that value even if the setter changes its parameter or stores a different value.
+The validator checks the registered single-argument void signature, receiver, and
+value type. Shared traversal discovers helpers inside branches, arguments, and
+sequences. Property metadata remains available in binding results; auto-properties
+use compiler-owned fields with ordinary initialization rules. See [properties](properties.md).
+
 The [validator](../../src/Weft.Compiler/IR/IrValidator.cs) checks function/local identity,
 scope, portable types, constant representations, operator signatures, call signatures,
 intrinsic registration, class/field ownership, receiver signatures, readonly writes,

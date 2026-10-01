@@ -46,6 +46,8 @@ public sealed record FunctionSymbol(int Id, string Name, WeftType ReturnType, Im
     SourceLocation Location, Visibility Visibility = Visibility.Internal, string? ContainingType = null, VariableSymbol? Receiver = null, bool IsConstructor = false);
 public sealed record FieldSymbol(int Id, string Name, WeftType Owner, WeftType Type, SourceLocation Location,
     Visibility Visibility = Visibility.Private, bool ReadOnly = false);
+public sealed record PropertySymbol(string Name, WeftType Owner, WeftType Type, SourceLocation Location,
+    Visibility Visibility, FunctionSymbol? Getter, FunctionSymbol? Setter, FieldSymbol? BackingField);
 public sealed record TypeSymbol(string Name, SourceLocation Location, Visibility Visibility = Visibility.Internal, bool IsStatic = false);
 
 public sealed class SymbolScope(SymbolScope? parent = null)

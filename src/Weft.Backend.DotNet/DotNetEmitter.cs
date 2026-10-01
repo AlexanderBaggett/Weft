@@ -36,6 +36,12 @@ public sealed class DotNetEmitter
         }
         foreach (var (ignored, result) in ObjectEmission.Sequences(module))
             writer.WriteLine($"private static {Type(result)} {ObjectEmission.SequenceName(ignored, result)}({Type(ignored)} ignored, {Type(result)} result) {{ return result; }}");
+        foreach (var setter in ObjectEmission.Setters(module))
+        {
+            writer.WriteLine($"private static {Type(setter.Parameters[0].Type)} p_{setter.Id}({Type(setter.Receiver!.Type)} receiver, {Type(setter.Parameters[0].Type)} value) {{", new(setter.Location, "property-assignment"));
+            writer.WriteLine($"f_{setter.Id}(receiver, value); return value;");
+            writer.WriteLine("}");
+        }
         foreach (var function in module.Functions)
         {
             writer.WriteLine($"#line {function.Origin.Location.Line} {Quote(function.Origin.Location.File)}");
@@ -127,6 +133,7 @@ public sealed class DotNetEmitter
         },
         IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
         IrUpdate update => $"unchecked({Update(update)})",
+        IrSetterCall setter => $"p_{setter.Setter.Id}({Expression(setter.Receiver)}, {Expression(setter.Value)})",
         IrAllocate allocated => $"new {Type(allocated.Type)}()",
         IrFieldRead read => $"({Expression(read.Receiver)}).m_{read.Field.Id}",
         IrFieldWrite write => $"(({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)})",

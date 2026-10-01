@@ -301,7 +301,7 @@ Contextual where possible (`from`, `on`, `after`, `mode`) to keep C# code portab
 ## Current executable grammar
 
 The parser gives ordinary functions, classes, fields, constructors, and methods typed
-syntax nodes. Property bodies are represented but not yet bound. Other declared
+syntax nodes, including property accessors and initializers. Other declared
 construct kinds retain their header and balanced token-group body plus the complete
 source text. Contextual keywords remain identifier tokens; declaration and block
 contexts decide their meaning. The binder emits WF2009 for unimplemented semantic
@@ -309,8 +309,11 @@ passes, so balanced sketches never appear to have passed policy checking.
 
 ```ebnf
 foundation-unit = { namespace-decl | foundation-function | foundation-class | structural-declaration } ;
-foundation-class = { modifier } "class" ident "{" { foundation-function | foundation-field | constructor } "}" ;
+foundation-class = { modifier } "class" ident "{" { foundation-function | foundation-field | foundation-property | constructor } "}" ;
 foundation-field = { modifier } type ident [ "=" expression ] ";" ;
+foundation-property = { visibility } type ident
+                      ( "=>" expression ";" | "{" accessor { accessor } "}" [ "=" expression ";" ] ) ;
+accessor        = [ visibility ] ( "get" | "set" ) ( ";" | foundation-block | "=>" expression ";" ) ;
 constructor     = { visibility } ident "(" [ parameter { "," parameter } ] ")" foundation-block ;
 (* The constructor name must match its containing class. Static classes allow static methods only. *)
 foundation-function = { modifier } type ident "(" [ parameter { "," parameter } ] ")"
@@ -358,7 +361,8 @@ execution remain required Phase 2 work. This checkpoint is not first-release sco
 Functions, constructors, and static/instance methods support overloads,
 public/internal/private checks, named and optional arguments, and int32-to-int64
 widening. The [object contract](contracts/objects.md) covers fields, construction, and
-non-null initialization. See the
+non-null initialization. [Property accessors](contracts/properties.md) preserve ordinary
+read/write evaluation and use source-level statement checks. See the
 [function contract](contracts/functions.md) and [control-flow contract](contracts/control-flow.md)
 for execution, scope, return checks, and current limitations. Project
 pipeline syntax is accepted; its graph execution remains Phase 3/6 work.

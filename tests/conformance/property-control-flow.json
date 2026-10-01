@@ -1,0 +1,7 @@
+{
+  "id": "property-control-flow",
+  "sources": {
+    "main.weft": "class Box { public int Count { get; set; } public string Text { get; set; } = \"A\"; }\nvoid Main() {\n    var b = new Box();\n    for (; b.Count < 3; b.Count++) { if (b.Count == 1) continue; Print(b.Count); }\n    Print(false && (++b.Count > 0)); Print(true ? b.Count : ++b.Count);\n    Print(b.Text += (b.Text = \"B\")); Print(b.Text);\n    b.Count = 2147483647; Print(++b.Count);\n}\n"
+  },
+  "stdout": "0\n2\nfalse\n3\nAB\nAB\n-2147483648\n"
+}

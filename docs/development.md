@@ -2,7 +2,8 @@
 
 Weft's first release still includes the full language on .NET and JVM. The current
 compiler includes the Phase 1 foundation and Phase 2 ordinary-language work: functions,
-classes, constructors, fields, instance/static methods, overloads, named/optional
+classes, constructors, fields, instance properties/accessors, instance/static methods,
+overloads, named/optional
 arguments, loops with break/continue, conditionals, update/compound-assignment
 operators, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
 syntax representation and explicit not-yet-implemented diagnostics. They remain
@@ -84,6 +85,17 @@ dotnet run --project src/Weft.Cli -- run --project examples/classes --backend jv
 Each run prints `50`, `50`, `true`, `false`, and `Ada`. See the
 [object contract](contracts/objects.md) for initialization checks and remaining work.
 
+The [property example](../examples/properties/Program.weft) adds getter-only and
+restricted-setter auto-properties, a custom clamping setter, and a computed getter:
+
+```sh
+dotnet run --project src/Weft.Cli -- run --project examples/properties --backend dotnet
+dotnet run --project src/Weft.Cli -- run --project examples/properties --backend jvm
+```
+
+Each run prints `A:5`, `-3`, `0`, `2`, and `A:3`. The assignment result is `-3` while
+the setter stores zero. See the [property contract](contracts/properties.md).
+
 ## Initial manifest
 
 ```toml
@@ -139,4 +151,5 @@ body, and WF1104 for multiple variables in a `var` for-initializer. See the
 [control-flow contract](contracts/control-flow.md). Objects add WF2019 for a public
 contract exposing an internal class, WF2020 for invalid instance/static use, WF2021
 for a readonly field write, and WF2022 for incomplete reference-field initialization.
-See the [object contract](contracts/objects.md).
+See the [object contract](contracts/objects.md). Properties add WF2023 for a missing
+getter/setter and WF2024 for invalid accessor declarations or accessibility.

@@ -22,6 +22,7 @@ public static class IrTraversal
             IrConditional conditional => [conditional.Condition, conditional.WhenTrue, conditional.WhenFalse],
             IrCall call => (call.Receiver is null ? Enumerable.Empty<IrNode>() : [call.Receiver]).Concat(call.Arguments),
             IrIntrinsic intrinsic => intrinsic.Arguments,
+            IrSetterCall setter => [setter.Receiver, setter.Value],
             IrFieldRead read => [read.Receiver],
             IrFieldWrite write => [write.Receiver, write.Value],
             IrFieldUpdate update => [update.Receiver],

@@ -100,7 +100,7 @@ public sealed class Parser
         var functionName = Identifier().Text;
         if (owner is not null && !constructor && Current.Text != "(")
         {
-            if (Current.Text == "{") return new PropertySyntax(functionName, returnType, ReadGroup(), modifiers.ToImmutable(), location);
+            if (Current.Text is "{" or "=>") return ParseProperty(functionName, returnType, modifiers.ToImmutable(), location);
             var initializer = Take("=") ? ParseExpression() : null; Expect(";");
             return new FieldSyntax(functionName, returnType, initializer, modifiers.ToImmutable(), location);
         }
@@ -128,6 +128,40 @@ public sealed class Parser
         else if (Current.Text == "{") functionBody = ParseBlock();
         else Expect(";");
         return new FunctionSyntax(functionName, returnType, parameters.ToImmutable(), functionBody, modifiers.ToImmutable(), location, constructor);
+    }
+
+    private PropertySyntax ParseProperty(string name, TypeSyntax type, ImmutableArray<string> modifiers, SourceLocation location)
+    {
+        if (Take("=>"))
+        {
+            var value = ParseExpression(); Expect(";");
+            return new(name, type, [new("get", new([new ReturnSyntax(value, value.Location)], value.Location), [], location)], null, modifiers, location);
+        }
+        Expect("{");
+        var accessors = ImmutableArray.CreateBuilder<AccessorSyntax>();
+        while (Current.Kind != TokenKind.End && Current.Text != "}")
+        {
+            var before = position;
+            var accessorLocation = Current.Location;
+            var accessorModifiers = ImmutableArray.CreateBuilder<string>();
+            while (Modifiers.Contains(Current.Text)) accessorModifiers.Add(Next().Text);
+            var kind = Identifier().Text;
+            BlockSyntax? body = null;
+            if (Take("=>"))
+            {
+                var value = ParseExpression(); Expect(";");
+                StatementSyntax statement = kind == "get" ? new ReturnSyntax(value, value.Location) : new ExpressionStatementSyntax(value, value.Location);
+                body = new([statement], value.Location);
+            }
+            else if (Current.Text == "{") body = ParseBlock();
+            else Expect(";");
+            accessors.Add(new(kind, body, accessorModifiers.ToImmutable(), accessorLocation));
+            if (position == before) Next();
+        }
+        Expect("}");
+        var initializer = Take("=") ? ParseExpression() : null;
+        if (initializer is not null) Expect(";");
+        return new(name, type, accessors.ToImmutable(), initializer, modifiers, location);
     }
 
     private string QualifiedName()

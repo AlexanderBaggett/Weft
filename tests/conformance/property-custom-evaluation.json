@@ -1,0 +1,7 @@
+{
+  "id": "property-custom-evaluation",
+  "sources": {
+    "main.weft": "class Counter {\n    public int Raw = 10;\n    public int Value {\n        get { Print(\"get\"); return Raw; }\n        set { Print(\"set:\" + value); Raw = value * 2; value = 99; return; }\n    }\n}\nCounter Get(Counter c) { Print(\"receiver\"); return c; }\nint Change(Counter c) { Print(\"rhs\"); c.Raw = 1; return 3; }\nvoid Main() {\n    var c = new Counter();\n    Print(Get(c).Value += Change(c)); Print(c.Raw);\n    Print(Get(c).Value++); Print(c.Raw);\n    Print(++Get(c).Value); Print(c.Raw);\n    Print(Get(c).Value = 4); Print(c.Raw);\n}\n"
+  },
+  "stdout": "receiver\nget\nrhs\nset:13\n13\n26\nreceiver\nget\nset:27\n26\n54\nreceiver\nget\nset:55\n55\n110\nreceiver\nset:4\n4\n8\n"
+}

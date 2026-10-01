@@ -27,7 +27,7 @@ public sealed partial class Binder
         var root = target;
         while (root is MemberSyntax member) root = member.Target;
         if (root is not NameSyntax name || name.Name == "this" || scope.Lookup(name.Name) is not null ||
-            currentFunction.ContainingType is { } owner && fields[owner].Any(f => f.Symbol.Name == name.Name)) { qualifier = null; return false; }
+            currentFunction.ContainingType is { } owner && MemberType(owner, name.Name) is not null) { qualifier = null; return false; }
         var nameText = NameOf(target);
         var type = FindType(nameText);
         if (type is not null) { qualifier = type.Name; return true; }
@@ -51,81 +51,138 @@ public sealed partial class Binder
         return BindInvocation(new(new NameSyntax(name, syntax.Location), syntax.Arguments, syntax.Location), name,
             functions.GetValueOrDefault(name) ?? [], arguments);
     }
-    private IrFieldRead? BindImplicitField(string name, SourceLocation location)
+    private sealed record BoundTarget(VariableSymbol? Local, FieldSymbol? Field, PropertySymbol? Property,
+        IrExpression? Receiver, SourceOrigin Origin)
     {
-        if (currentFunction.ContainingType is not { } owner) return null;
-        var field = fields[owner].FirstOrDefault(f => f.Symbol.Name == name).Symbol;
-        if (field is null) return null;
-        if (currentFunction.Receiver is null || bindingFieldInitializer)
-        { diagnostics.Error("WF2020", "An instance field requires an object; field initializers cannot access this.", location); return null; }
-        return new(field, This(new(location)), new(location));
+        public WeftType Type => Local?.Type ?? Field?.Type ?? Property!.Type;
     }
-    private IrFieldRead? BindField(MemberSyntax member)
+    private WeftType? MemberType(string owner, string name) =>
+        fields[owner].FirstOrDefault(f => f.Symbol.Name == name).Symbol?.Type ?? properties[owner].FirstOrDefault(p => p.Name == name)?.Type;
+
+    private BoundTarget? BindImplicitMember(string name, SourceLocation location)
+    {
+        if (currentFunction.ContainingType is not { } owner || MemberType(owner, name) is null) return null;
+        if (currentFunction.Receiver is null || bindingFieldInitializer)
+        { diagnostics.Error("WF2020", "An instance member requires an object; initializers cannot access this.", location); return null; }
+        return SelectMember(owner, name, This(new(location)), new(location));
+    }
+    private BoundTarget? BindMember(MemberSyntax member)
     {
         var receiver = member.Target is NameSyntax { Name: "this" } && currentFunction.Receiver is not null && !bindingFieldInitializer
             ? This(new(member.Target.Location)) : BindExpression(member.Target);
-        if (!fields.TryGetValue(receiver.Type.Name, out var members))
-        { if (receiver.Type != WeftType.Error) diagnostics.Error("WF2001", $"Type '{receiver.Type.Name}' has no field '{member.Member}'.", member.Location); return null; }
-        var field = members.FirstOrDefault(f => f.Symbol.Name == member.Member).Symbol;
-        if (field is null) { diagnostics.Error("WF2001", $"Unknown field '{member.Member}'.", member.Location); return null; }
-        if (field.Visibility == Visibility.Private && field.Owner.Name != currentFunction.ContainingType)
-            diagnostics.Error("WF2011", $"Field '{field.Name}' is inaccessible from this location.", member.Location);
-        return new(field, receiver, new(member.Location));
+        if (!fields.ContainsKey(receiver.Type.Name) || MemberType(receiver.Type.Name, member.Member) is null)
+        { if (receiver.Type != WeftType.Error) diagnostics.Error("WF2001", $"Type '{receiver.Type.Name}' has no field or property '{member.Member}'.", member.Location); return null; }
+        return SelectMember(receiver.Type.Name, member.Member, receiver, new(member.Location));
     }
-    private IrExpression? BindDestination(ExpressionSyntax syntax)
+    private BoundTarget SelectMember(string owner, string name, IrExpression receiver, SourceOrigin origin)
+    {
+        var field = fields[owner].FirstOrDefault(f => f.Symbol.Name == name).Symbol;
+        var property = properties[owner].FirstOrDefault(p => p.Name == name);
+        if ((field?.Visibility ?? property!.Visibility) == Visibility.Private && owner != currentFunction.ContainingType)
+            diagnostics.Error("WF2011", $"Member '{name}' is inaccessible from this location.", origin.Location);
+        return new(null, field, property, receiver, origin);
+    }
+    private BoundTarget? BindDestination(ExpressionSyntax syntax)
     {
         if (syntax is NameSyntax name)
         {
             if (name.Name == "this") return null;
-            if (scope.Lookup(name.Name) is { } local) return new IrRead(local, new(syntax.Location));
-            return BindImplicitField(name.Name, name.Location);
+            if (scope.Lookup(name.Name) is { } local) return new(local, null, null, null, new(syntax.Location));
+            return BindImplicitMember(name.Name, name.Location);
         }
-        return syntax is MemberSyntax member ? BindField(member) : null;
+        return syntax is MemberSyntax member ? BindMember(member) : null;
     }
-    private void CheckWritable(IrFieldRead field)
+    private IrExpression ReadTarget(BoundTarget target)
     {
-        if (field.Field.ReadOnly && !(currentFunction.IsConstructor && IsThis(field.Receiver) && field.Field.Owner.Name == currentFunction.ContainingType))
-            diagnostics.Error("WF2021", $"Readonly field '{field.Field.Name}' can be assigned only by its constructor.", field.Origin.Location);
+        if (target.Local is { } local) return new IrRead(local, target.Origin);
+        if (target.Field is { } field)
+        { RequireFieldInitialized(field, target.Receiver!, target.Origin.Location); return new IrFieldRead(field, target.Receiver!, target.Origin); }
+        return ReadProperty(target.Property!, target.Receiver!, target.Origin);
+    }
+    private BoundTarget CheckWritable(BoundTarget target)
+    {
+        if (target.Property is { } property)
+        {
+            if (property.BackingField is { } backing && currentFunction.IsConstructor && IsThis(target.Receiver!))
+                target = target with { Property = null, Field = backing };
+            else if (property.Setter is null)
+                diagnostics.Error("WF2023", $"Property '{property.Name}' has no setter.", target.Origin.Location);
+            else CheckAccessor(property.Setter, target.Origin);
+        }
+        if (target.Field is { ReadOnly: true } field && !(currentFunction.IsConstructor && IsThis(target.Receiver!) && field.Owner.Name == currentFunction.ContainingType))
+            diagnostics.Error("WF2021", $"Readonly field '{field.Name}' can be assigned only by its constructor.", target.Origin.Location);
+        return target;
+    }
+    private IrExpression WriteTarget(BoundTarget target, IrExpression value, SourceOrigin origin)
+    {
+        value = ConvertImplicit(value, target.Type);
+        if (target.Local is { } local) return new IrAssign(local, value, origin);
+        if (target.Field is { } field)
+        {
+            if (IsThis(target.Receiver!)) initializedFields.Add(field.Id);
+            return new IrFieldWrite(field, target.Receiver!, value, origin);
+        }
+        if (IsThis(target.Receiver!)) RequireInitialized(origin.Location);
+        return target.Property!.Setter is { } setter ? new IrSetterCall(setter, target.Receiver!, value, origin) : Error(origin);
+    }
+    private BoundTarget CaptureReceiver(BoundTarget target, ImmutableArray<IrVariable>.Builder bindings)
+    {
+        if (target.Receiver is null || IsThis(target.Receiver)) return target;
+        var temporary = new VariableSymbol(nextSymbol++, "<member-target>", target.Receiver.Type, target.Origin.Location);
+        bindings.Add(new(temporary, target.Receiver, new(target.Origin.Location, "assignment-target", target.Origin)));
+        return target with { Receiver = new IrRead(temporary, target.Origin) };
     }
     private IrExpression BindAssignment(BinarySyntax syntax)
     {
         var origin = new SourceOrigin(syntax.Location);
-        var destination = BindDestination(syntax.Left);
-        if (destination is IrFieldRead read)
+        var target = BindDestination(syntax.Left);
+        if (target is null)
+        { BindExpression(syntax.Right); diagnostics.Error("WF2005", "Assignment requires a writable local, parameter, field, or property.", syntax.Location); return Error(origin); }
+        target = CheckWritable(target);
+        var bindings = ImmutableArray.CreateBuilder<IrVariable>();
+        IrExpression? old = null;
+        if (syntax.Operator != "=")
         {
-            CheckWritable(read);
-            if (syntax.Operator != "=") RequireFieldInitialized(read.Field, read.Receiver, syntax.Location);
+            var original = target;
+            // Check construction before replacing this/receiver with a generated temporary.
+            var read = ReadTarget(original);
+            target = CaptureReceiver(target, bindings);
+            old = target == original ? read : ReadTarget(target);
+            if (target.Property is not null || bindings.Count > 0)
+            {
+                var temporary = new VariableSymbol(nextSymbol++, "<member-old>", target.Type, syntax.Location);
+                bindings.Add(new(temporary, old, new(syntax.Location, "assignment-old-value", origin)));
+                old = new IrRead(temporary, origin);
+            }
         }
         var value = BindExpression(syntax.Right);
-        if (destination is null) { diagnostics.Error("WF2005", "Assignment requires a writable local, parameter, or field.", syntax.Location); return Error(origin); }
-        if (destination is IrRead local)
-        {
-            if (syntax.Operator != "=") value = BindBinary(local, syntax.Operator[..1], value, origin);
-            return new IrAssign(local.Symbol, ConvertImplicit(value, local.Type), origin);
-        }
-        var field = (IrFieldRead)destination;
-        if (IsThis(field.Receiver)) initializedFields.Add(field.Field.Id);
-        if (syntax.Operator == "=") return new IrFieldWrite(field.Field, field.Receiver, ConvertImplicit(value, field.Type), origin);
-        if (IsThis(field.Receiver))
-            return new IrFieldWrite(field.Field, field.Receiver,
-                ConvertImplicit(BindBinary(field, syntax.Operator[..1], value, origin), field.Type), origin);
-        // Freeze both destination and old value before any effects in the RHS.
-        var target = new VariableSymbol(nextSymbol++, "<field-target>", field.Receiver.Type, syntax.Left.Location);
-        var old = new VariableSymbol(nextSymbol++, "<field-old>", field.Type, syntax.Left.Location);
-        var receiver = new IrRead(target, origin);
-        var result = ConvertImplicit(BindBinary(new IrRead(old, origin), syntax.Operator[..1], value, origin), field.Type);
-        return new IrSequence([new(target, field.Receiver, new(syntax.Left.Location, "assignment-target")),
-            new(old, new IrFieldRead(field.Field, receiver, origin), new(syntax.Left.Location, "assignment-old-value"))],
-            new IrFieldWrite(field.Field, receiver, result, origin), origin);
+        if (old is not null) value = BindBinary(old, syntax.Operator[..1], value, origin);
+        var result = WriteTarget(target, value, origin);
+        return bindings.Count == 0 ? result : new IrSequence(bindings.ToImmutable(), result, origin);
     }
     private IrExpression BindUpdate(UpdateSyntax syntax)
     {
         var origin = new SourceOrigin(syntax.Location);
-        var destination = BindDestination(syntax.Operand);
-        if (destination is null) { diagnostics.Error("WF2005", "Increment/decrement requires a writable local, parameter, or field.", syntax.Location); return Error(origin); }
-        if (!IsInteger(destination.Type)) diagnostics.Error("WF2003", "Increment/decrement currently requires int32 or int64.", syntax.Location);
-        if (destination is IrRead local) return new IrUpdate(local.Symbol, syntax.Operator, syntax.Postfix, origin);
-        var field = (IrFieldRead)destination; CheckWritable(field);
-        return new IrFieldUpdate(field.Field, field.Receiver, syntax.Operator, syntax.Postfix, origin);
+        var target = BindDestination(syntax.Operand);
+        if (target is null) { diagnostics.Error("WF2005", "Increment/decrement requires a writable local, parameter, field, or property.", syntax.Location); return Error(origin); }
+        target = CheckWritable(target);
+        if (!IsInteger(target.Type)) diagnostics.Error("WF2003", "Increment/decrement currently requires int32 or int64.", syntax.Location);
+        if (target.Local is { } local) return new IrUpdate(local, syntax.Operator, syntax.Postfix, origin);
+        if (target.Field is { } field) return new IrFieldUpdate(field, target.Receiver!, syntax.Operator, syntax.Postfix, origin);
+        var read = ReadTarget(target);
+        var original = target;
+        var bindings = ImmutableArray.CreateBuilder<IrVariable>();
+        target = CaptureReceiver(target, bindings);
+        var old = new VariableSymbol(nextSymbol++, "<property-old>", target.Type, syntax.Location);
+        bindings.Add(new(old, target == original ? read : ReadTarget(target), origin));
+        var previous = new IrRead(old, origin);
+        var result = WriteTarget(target, BindBinary(previous, syntax.Operator == "++" ? "+" : "-", new IrConstant(1, WeftType.Int32, origin), origin), origin);
+        if (syntax.Postfix)
+        {
+            var ignored = new VariableSymbol(nextSymbol++, "<property-update>", result.Type, syntax.Location);
+            bindings.Add(new(ignored, result, origin));
+            result = previous;
+        }
+        return new IrSequence(bindings.ToImmutable(), result, origin);
     }
 }

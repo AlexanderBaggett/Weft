@@ -1,0 +1,7 @@
+{
+  "id": "property-references-and-accessors",
+  "sources": {
+    "main.weft": "class Item { public int Number { get; set; } }\nclass Holder {\n    public Item Child { get; }\n    private int stored;\n    public int Restricted { private get => stored; set { stored = value; } }\n    public int WriteOnly { set { if (value < 0) return; stored = value; } }\n    public Holder(Item item) { Child = item; }\n    public int Read() => Restricted;\n}\nvoid Main() {\n    var item = new Item(); var h = new Holder(item); h.Child.Number += 3;\n    Print(item.Number); Print(h.Child == item);\n    Print(h.WriteOnly = -2); Print(h.Read());\n    h.Restricted = 8; Print(h.Read()); h.WriteOnly = 9; Print(h.Read());\n}\n"
+  },
+  "stdout": "3\ntrue\n-2\n0\n8\n9\n"
+}

@@ -7,6 +7,8 @@ namespace Weft.Compiler.Backends;
 public static class ObjectEmission
 {
     public static string TypeName(WeftType type) => "t_" + Convert.ToHexString(Encoding.UTF8.GetBytes(type.Name));
+    public static IEnumerable<FunctionSymbol> Setters(IrModule module) => module.Functions
+        .SelectMany(f => IrTraversal.Descendants(f.Body)).OfType<IrSetterCall>().Select(s => s.Setter).Distinct();
     public static string SequenceName(WeftType ignored, WeftType result) => "s_" + TypeName(ignored) + "_" + TypeName(result);
     public static IEnumerable<VariableSymbol> Temporaries(IrFunction function) => IrTraversal.Descendants(function.Body)
         .OfType<IrSequence>().SelectMany(s => s.Bindings).Select(b => b.Symbol);
