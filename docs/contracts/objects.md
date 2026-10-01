@@ -62,7 +62,8 @@ fields/methods, or constructor parameters.
 
 Uninitialized integer and bool fields start at zero and false. String and class fields
 are non-null: every normally completing constructor must assign them, either in a
-field initializer or its body. Reading such a field before assignment is rejected.
+field initializer or its body, unless the member is explicitly `required` and assigned
+by the caller's checked [object initializer](initialization.md). Reading such a field before assignment is rejected.
 The compiler also requires every non-null field to be assigned before `this` is passed,
 returned, stored in a local, or used to call an instance method. Accessing an individual
 field through `this` remains possible while construction is in progress.
@@ -76,7 +77,8 @@ and broader flow analysis are developed. The current diagnostic is WF2022.
 
 A constructor may use `return;` after satisfying initialization, but cannot return an
 expression. A `readonly` field can be assigned by its initializer and through the
-current `this` in its own constructor. Writes through other objects or methods fail
+current `this` in its own constructor or an init accessor declared by that class.
+Writes through other objects or ordinary methods fail
 with WF2021. Fields are otherwise mutable.
 
 ## Calls and mutation order
@@ -117,9 +119,10 @@ returns while traversing function bodies for generated helpers.
 
 ## Remaining object work
 
-Object initializers, constructor chaining, models, records and
+[Object/nested initializers, required members, and init accessors](initialization.md)
+are executable. Constructor chaining, models, records and
 record value equality/copying, inheritance/interfaces, nested and generic types,
-nullable references, static fields/properties and type initialization, init accessors,
+nullable references, static fields/properties and type initialization,
 indexers, and callable members remain required work. See [properties](properties.md)
 for currently executable accessor forms.
 Current emitted classes are an implementation detail, not a separately consumable

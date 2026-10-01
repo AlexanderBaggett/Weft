@@ -1,0 +1,7 @@
+{
+  "id": "initializer-empty-nested-read",
+  "sources": {
+    "main.weft": "class C {\n    public required string Name;\n    public C Self { get { Print(\"unexpected getter\"); Print(Name); return this; } }\n}\nvoid Main() {\n    var first = new C { Self = {}, Name = \"first\" };\n    var second = new C { Self = { Self = { Self = {} } }, Name = \"second\" };\n    Print(first.Name); Print(second.Name);\n}\n"
+  },
+  "stdout": "first\nsecond\n"
+}

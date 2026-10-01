@@ -11,10 +11,10 @@ public sealed partial class Binder
     private bool bindingFieldInitializer;
     private IrRead This(SourceOrigin origin) => new(currentFunction.Receiver!, origin);
     private bool IsThis(IrExpression receiver) => receiver is IrRead read && read.Symbol == currentFunction.Receiver;
-    private void RequireInitialized(SourceLocation location)
+    private void RequireInitialized(SourceLocation location, bool completing = false)
     {
         if (!currentFunction.IsConstructor) return;
-        var missing = fields[currentFunction.ContainingType!].Where(f => f.Symbol.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(f.Symbol.Id)).Select(f => f.Symbol.Name).ToArray();
+        var missing = fields[currentFunction.ContainingType!].Where(f => f.Symbol.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(f.Symbol.Id) && !(completing && f.Symbol.Required)).Select(f => f.Symbol.Name).ToArray();
         if (missing.Length > 0) diagnostics.Error("WF2022", "Constructor must initialize non-null fields before this escapes: " + string.Join(", ", missing) + ".", location);
     }
     private void RequireFieldInitialized(FieldSymbol field, IrExpression receiver, SourceLocation location)
@@ -41,18 +41,8 @@ public sealed partial class Binder
         }
         qualifier = null; return false;
     }
-    private IrExpression BindNew(NewSyntax syntax)
-    {
-        var type = ResolveType(syntax.Type, false);
-        if (type.Kind != TypeKind.Nominal || !types.TryGetValue(type.Name, out var symbol) || symbol.IsStatic)
-        { diagnostics.Error("WF2020", "new requires an ordinary class type.", syntax.Location); return Error(new(syntax.Location)); }
-        var arguments = syntax.Arguments.Select(a => BindExpression(a.Expression)).ToImmutableArray();
-        var name = type.Name + "..ctor";
-        return BindInvocation(new(new NameSyntax(name, syntax.Location), syntax.Arguments, syntax.Location), name,
-            functions.GetValueOrDefault(name) ?? [], arguments);
-    }
     private sealed record BoundTarget(VariableSymbol? Local, FieldSymbol? Field, PropertySymbol? Property,
-        IrExpression? Receiver, SourceOrigin Origin)
+        IrExpression? Receiver, SourceOrigin Origin, bool Initializing = false)
     {
         public WeftType Type => Local?.Type ?? Field?.Type ?? Property!.Type;
     }
@@ -103,14 +93,16 @@ public sealed partial class Binder
     {
         if (target.Property is { } property)
         {
+            if (property.InitOnly && !target.Initializing && !(IsThis(target.Receiver!) && (currentFunction.IsConstructor || currentFunction.IsInitAccessor)))
+                diagnostics.Error("WF2025", $"Init-only property '{property.Name}' can be assigned only during construction.", target.Origin.Location);
             if (property.BackingField is { } backing && currentFunction.IsConstructor && IsThis(target.Receiver!))
                 target = target with { Property = null, Field = backing };
             else if (property.Setter is null)
                 diagnostics.Error("WF2023", $"Property '{property.Name}' has no setter.", target.Origin.Location);
             else CheckAccessor(property.Setter, target.Origin);
         }
-        if (target.Field is { ReadOnly: true } field && !(currentFunction.IsConstructor && IsThis(target.Receiver!) && field.Owner.Name == currentFunction.ContainingType))
-            diagnostics.Error("WF2021", $"Readonly field '{field.Name}' can be assigned only by its constructor.", target.Origin.Location);
+        if (target.Field is { ReadOnly: true } field && !((currentFunction.IsConstructor || currentFunction.IsInitAccessor) && IsThis(target.Receiver!) && field.Owner.Name == currentFunction.ContainingType))
+            diagnostics.Error("WF2021", $"Readonly field '{field.Name}' can be assigned only through this in its constructor or an init accessor.", target.Origin.Location);
         return target;
     }
     private IrExpression WriteTarget(BoundTarget target, IrExpression value, SourceOrigin origin)

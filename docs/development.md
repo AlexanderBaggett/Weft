@@ -2,7 +2,8 @@
 
 Weft's first release still includes the full language on .NET and JVM. The current
 compiler includes the Phase 1 foundation and Phase 2 ordinary-language work: functions,
-classes, constructors, fields, instance properties/accessors, instance/static methods,
+classes, constructors, object initializers, required members, fields, instance
+properties/get/set/init accessors, instance/static methods,
 overloads, named/optional
 arguments, loops with break/continue, conditionals, update/compound-assignment
 operators, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
@@ -96,6 +97,17 @@ dotnet run --project src/Weft.Cli -- run --project examples/properties --backend
 Each run prints `A:5`, `-3`, `0`, `2`, and `A:3`. The assignment result is `-3` while
 the setter stores zero. See the [property contract](contracts/properties.md).
 
+The [initializer example](../examples/initializers/Program.weft) constructs required
+init-only identity properties and a mutable quantity:
+
+```sh
+dotnet run --project src/Weft.Cli -- run --project examples/initializers --backend dotnet
+dotnet run --project src/Weft.Cli -- run --project examples/initializers --backend jvm
+```
+
+Each run prints `Ada:London:3` and `Ada:London:4`. See the
+[initialization contract](contracts/initialization.md) for required-member and non-null checks.
+
 ## Initial manifest
 
 ```toml
@@ -152,4 +164,6 @@ body, and WF1104 for multiple variables in a `var` for-initializer. See the
 contract exposing an internal class, WF2020 for invalid instance/static use, WF2021
 for a readonly field write, and WF2022 for incomplete reference-field initialization.
 See the [object contract](contracts/objects.md). Properties add WF2023 for a missing
-getter/setter and WF2024 for invalid accessor declarations or accessibility.
+getter/setter and WF2024 for invalid accessor declarations or accessibility. Initialization
+adds WF2025 for init writes outside construction, WF2026 for missing required members,
+WF2027 for invalid required declarations, and WF2028 for invalid member initializers.

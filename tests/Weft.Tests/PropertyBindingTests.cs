@@ -44,7 +44,6 @@ public sealed class PropertyBindingTests
     [InlineData("class C { public int P { get; set; } } void Main() { new C().P = 1L; }", "WF2003")]
     [InlineData("class C { public string P { get; set; } = \"x\"; } void Main() { new C().P++; }", "WF2003")]
     [InlineData("class C { public static int P { get; set; } }", "WF2009")]
-    [InlineData("class C { public int P { get; init; } }", "WF2009")]
     [InlineData("class C { public int P { get; } } void Main() { var c = new C(); c.P; }", "WF2008")]
     [InlineData("class C { public int P { get; } } void Main() { var c = new C(); for (; false; c.P) {} }", "WF2008")]
     public void Invalid_properties_are_rejected_before_emission(string source, string code)

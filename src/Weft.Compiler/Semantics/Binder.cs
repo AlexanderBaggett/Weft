@@ -31,7 +31,7 @@ public sealed partial class Binder
         foreach (var tree in inputs) CollectTypes(tree.Declarations, "");
         if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), [], types.Values.ToImmutableArray());
         foreach (var tree in inputs) Declare(tree.Declarations, "");
-        ValidatePublicContracts();
+        ValidatePublicContracts(); ValidateRequiredMembers();
         if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray());
         var bound = ImmutableArray.CreateBuilder<IrFunction>();
         foreach (var (syntax, symbol, ns) in bodies)
@@ -69,7 +69,7 @@ public sealed partial class Binder
                 prefix.AddRange(body.Statements);
                 if (ControlFlow.CanComplete(body))
                 {
-                    RequireInitialized(syntax.Location);
+                    RequireInitialized(syntax.Location, completing: true);
                     prefix.Add(new IrReturn(This(new(syntax.Location)), new(syntax.Location, "constructor-result")));
                 }
                 body = body with { Statements = prefix.ToImmutable() };
@@ -136,7 +136,7 @@ public sealed partial class Binder
                 if (currentFunction.IsConstructor)
                 {
                     if (returned.Expression is not null) diagnostics.Error("WF2003", "A constructor return cannot specify a value.", returned.Location);
-                    RequireInitialized(returned.Location); return new IrReturn(This(origin), origin);
+                    RequireInitialized(returned.Location, completing: true); return new IrReturn(This(origin), origin);
                 }
                 var value = returned.Expression is null ? null : BindExpression(returned.Expression);
                 if (value?.Type == WeftType.Void) diagnostics.Error("WF2003", "A void return cannot carry an expression; call it before returning.", statement.Location);

@@ -1,0 +1,7 @@
+{
+  "id": "required-object-members",
+  "sources": {
+    "main.weft": "class Address { public required string City { get; init; } }\nclass Person {\n    public required string Name;\n    public required Address Address { get; init; }\n    public required int Age { get; set; } = 1;\n    public string Label => Name + \":\" + Address.City + \":\" + Age;\n}\nPerson Make() => new Person { Age = 30, Name = \"Ada\", Address = new Address { City = \"London\" } };\nvoid Main() { var p = Make(); Print(p.Label); p.Age++; Print(p.Label); }\n"
+  },
+  "stdout": "Ada:London:30\nAda:London:31\n"
+}

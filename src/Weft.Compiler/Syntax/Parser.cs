@@ -12,7 +12,7 @@ public sealed class Parser
     private int position;
     private SyntaxToken Current => tokens[Math.Min(position, tokens.Length - 1)];
     private SyntaxToken Peek(int offset) => tokens[Math.Min(position + offset, tokens.Length - 1)];
-    private static readonly HashSet<string> Modifiers = ["public", "private", "internal", "static", "async", "pure", "idempotent", "external", "readonly"];
+    private static readonly HashSet<string> Modifiers = ["public", "private", "internal", "static", "async", "pure", "idempotent", "external", "readonly", "required"];
     private static readonly Dictionary<string, ConstructKind> Constructs = Enum.GetValues<ConstructKind>()
         .Where(k => k != ConstructKind.SwitchGroup).ToDictionary(k => k.ToString().ToLowerInvariant());
 
@@ -162,6 +162,21 @@ public sealed class Parser
         var initializer = Take("=") ? ParseExpression() : null;
         if (initializer is not null) Expect(";");
         return new(name, type, accessors.ToImmutable(), initializer, modifiers, location);
+    }
+
+    private ImmutableArray<MemberInitializerSyntax> ParseObjectInitializer()
+    {
+        Expect("{");
+        var members = ImmutableArray.CreateBuilder<MemberInitializerSyntax>();
+        while (Current.Kind != TokenKind.End && Current.Text != "}")
+        {
+            var name = Identifier(); Expect("=");
+            if (Current.Text == "{") members.Add(new(name.Text, null, ParseObjectInitializer(), name.Location));
+            else members.Add(new(name.Text, ParseExpression(), default, name.Location));
+            if (!Take(",")) break;
+        }
+        Expect("}");
+        return members.ToImmutable();
     }
 
     private string QualifiedName()
@@ -349,7 +364,10 @@ public sealed class Parser
         }
         else if (Take("new"))
         {
-            var type = ParseType(); left = new NewSyntax(type, ParseArguments(), type.Location);
+            var type = ParseType();
+            var arguments = Current.Text == "{" ? ImmutableArray<ArgumentSyntax>.Empty : ParseArguments();
+            var initializers = Current.Text == "{" ? ParseObjectInitializer() : default;
+            left = new NewSyntax(type, arguments, type.Location, initializers);
         }
         else if (Take("(")) { left = ParseExpression(); Expect(")"); }
         else if (Current.Kind is TokenKind.Number or TokenKind.String or TokenKind.InterpolatedString || Current.Text is "true" or "false" or "null") left = new LiteralSyntax(Next());

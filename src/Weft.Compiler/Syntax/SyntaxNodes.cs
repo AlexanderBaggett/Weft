@@ -13,7 +13,7 @@ public sealed record ParameterSyntax(TypeSyntax Type, string Name, SourceLocatio
 public sealed record ClassSyntax(string ClassName, ImmutableArray<DeclarationSyntax> Members,
     ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(ClassName, Location);
 public sealed record FunctionSyntax(string FunctionName, TypeSyntax ReturnType, ImmutableArray<ParameterSyntax> Parameters,
-    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false) : DeclarationSyntax(FunctionName, Location);
+    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false, bool IsInitAccessor = false) : DeclarationSyntax(FunctionName, Location);
 public sealed record FieldSyntax(string FieldName, TypeSyntax Type, ExpressionSyntax? Initializer,
     ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(FieldName, Location);
 public sealed record AccessorSyntax(string Kind, BlockSyntax? Body, ImmutableArray<string> Modifiers,
@@ -55,5 +55,8 @@ public sealed record ConditionalSyntax(ExpressionSyntax Condition, ExpressionSyn
     SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record ArgumentSyntax(ExpressionSyntax Expression, string? Name, SourceLocation Location) : SyntaxNode(Location);
 public sealed record CallSyntax(ExpressionSyntax Target, ImmutableArray<ArgumentSyntax> Arguments, SourceLocation Location) : ExpressionSyntax(Location);
-public sealed record NewSyntax(TypeSyntax Type, ImmutableArray<ArgumentSyntax> Arguments, SourceLocation Location) : ExpressionSyntax(Location);
+public sealed record MemberInitializerSyntax(string Name, ExpressionSyntax? Value, ImmutableArray<MemberInitializerSyntax> Members,
+    SourceLocation Location) : SyntaxNode(Location);
+public sealed record NewSyntax(TypeSyntax Type, ImmutableArray<ArgumentSyntax> Arguments, SourceLocation Location,
+    ImmutableArray<MemberInitializerSyntax> Initializers = default) : ExpressionSyntax(Location);
 public sealed record MemberSyntax(ExpressionSyntax Target, string Member, SourceLocation Location) : ExpressionSyntax(Location);

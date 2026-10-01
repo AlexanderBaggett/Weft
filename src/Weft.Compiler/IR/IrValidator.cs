@@ -26,6 +26,7 @@ public static class IrValidator
         foreach (var field in fields.Values) CheckType(field.Type, false, new(field.Location));
         FunctionSymbol? currentFunction = null;
         HashSet<int> functionIdentities = [];
+        HashSet<int> initializing = [];
         foreach (var function in module.Functions)
         {
             var signature = function.Symbol.Name + "(" + string.Join(",", function.Symbol.Parameters.Select(p => p.Type.Name)) + ")";
@@ -35,6 +36,13 @@ public static class IrValidator
         foreach (var function in module.Functions)
         {
             currentFunction = function.Symbol;
+            if (currentFunction.IsInitAccessor && (currentFunction.IsConstructor || currentFunction.Receiver is null ||
+                currentFunction.ReturnType != WeftType.Void || currentFunction.Parameters.Length != 1))
+                Fail("Invalid IR init accessor signature.", function.Origin);
+            if (currentFunction.IsConstructor && (currentFunction.Receiver is null || function.Body.Statements.IsDefaultOrEmpty ||
+                function.Body.Statements[0] is not IrVariable allocation || allocation.Symbol != currentFunction.Receiver ||
+                allocation.Initializer is not IrAllocate memory || memory.Type != currentFunction.Receiver.Type))
+                Fail("IR constructor must begin by allocating its receiver.", function.Origin);
             var locals = new Dictionary<int, VariableSymbol>();
             var identities = new HashSet<int>(); functionIdentities = identities;
             if (function.Symbol.Receiver is { } receiver)
@@ -85,6 +93,8 @@ public static class IrValidator
                     if (!identities.Add(variable.Symbol.Id) || !locals.TryAdd(variable.Symbol.Id, variable.Symbol)) Fail("Duplicate IR local identity.", variable.Origin);
                     break;
                 case IrReturn value:
+                    if (currentFunction?.IsConstructor == true && (value.Expression is not IrRead result || result.Symbol != currentFunction.Receiver))
+                        Fail("IR constructor must return its allocated receiver.", value.Origin);
                     if (value.Expression is not null)
                     {
                         Expression(value.Expression, locals);
@@ -167,8 +177,16 @@ public static class IrValidator
                     if (sequence.Bindings.IsDefaultOrEmpty)
                     { Fail("IR sequence must contain at least one binding.", sequence.Origin); break; }
                     var sequenceLocals = new Dictionary<int, VariableSymbol>(locals);
-                    foreach (var binding in sequence.Bindings) Statement(binding, sequenceLocals, functionIdentities, WeftType.Void);
+                    var first = sequence.Bindings[0];
+                    if (sequence.Initializing is { } instance && (first.Symbol != instance ||
+                        first.Initializer is not IrCall { Function.IsConstructor: true } construction || construction.Type != instance.Type ||
+                        sequence.Value is not IrRead result || result.Symbol != instance))
+                        Fail("IR object initializer must start with construction and yield that same object.", sequence.Origin);
+                    Statement(first, sequenceLocals, functionIdentities, WeftType.Void);
+                    var added = sequence.Initializing is { } fresh && initializing.Add(fresh.Id);
+                    foreach (var binding in sequence.Bindings.Skip(1)) Statement(binding, sequenceLocals, functionIdentities, WeftType.Void);
                     Expression(sequence.Value, sequenceLocals);
+                    if (added) initializing.Remove(sequence.Initializing!.Id);
                     break;
                 case IrConvert conversion:
                     Expression(conversion.Operand, locals);
@@ -179,6 +197,8 @@ public static class IrValidator
                     if (!locals.TryGetValue(read.Symbol.Id, out var declared) || declared != read.Symbol) Fail("IR read refers to an out-of-scope or mismatched local.", read.Origin);
                     break;
                 case IrAssign assign:
+                    if (initializing.Contains(assign.Symbol.Id) || assign.Symbol == currentFunction?.Receiver)
+                        Fail("IR cannot reassign this or an initializing object identity.", assign.Origin);
                     Expression(new IrRead(assign.Symbol, assign.Origin), locals); Expression(assign.Value, locals);
                     if (assign.Type != assign.Value.Type) Fail("IR assignment type mismatch.", assign.Origin);
                     break;
@@ -207,6 +227,10 @@ public static class IrValidator
                     break;
                 case IrCall call:
                     if (!functions.TryGetValue(call.Function.Id, out var target) || target != call.Function) Fail("IR call targets a missing or mismatched function.", call.Origin);
+                    if (call.Function.IsInitAccessor && !(call.Receiver is IrRead initReceiver &&
+                        (initializing.Contains(initReceiver.Symbol.Id) || initReceiver.Symbol == currentFunction?.Receiver &&
+                            (currentFunction.IsConstructor || currentFunction.IsInitAccessor))))
+                        Fail("IR init accessor call is outside object initialization.", call.Origin);
                     var needsReceiver = call.Function.Receiver is not null && !call.Function.IsConstructor;
                     if (call.Receiver is not null) Expression(call.Receiver, locals);
                     if (needsReceiver != (call.Receiver is not null) || needsReceiver && call.Receiver?.Type != call.Function.Receiver!.Type)
@@ -235,8 +259,8 @@ public static class IrValidator
         }
         void Writable(FieldSymbol field, IrExpression receiver, SourceOrigin origin)
         {
-            if (field.ReadOnly && !(currentFunction?.IsConstructor == true && receiver is IrRead read && read.Symbol == currentFunction.Receiver))
-                Fail("IR readonly field write is outside its constructor.", origin);
+            if (field.ReadOnly && !((currentFunction?.IsConstructor == true || currentFunction?.IsInitAccessor == true) && receiver is IrRead read && read.Symbol == currentFunction.Receiver))
+                Fail("IR readonly field write is outside its constructor or init accessor.", origin);
         }
         void Arguments(ImmutableArray<WeftType> expected, ImmutableArray<IrExpression> actual, SourceOrigin origin, Dictionary<int, VariableSymbol> locals)
         {

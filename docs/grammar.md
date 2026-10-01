@@ -311,9 +311,9 @@ passes, so balanced sketches never appear to have passed policy checking.
 foundation-unit = { namespace-decl | foundation-function | foundation-class | structural-declaration } ;
 foundation-class = { modifier } "class" ident "{" { foundation-function | foundation-field | foundation-property | constructor } "}" ;
 foundation-field = { modifier } type ident [ "=" expression ] ";" ;
-foundation-property = { visibility } type ident
+foundation-property = { visibility | "required" } type ident
                       ( "=>" expression ";" | "{" accessor { accessor } "}" [ "=" expression ";" ] ) ;
-accessor        = [ visibility ] ( "get" | "set" ) ( ";" | foundation-block | "=>" expression ";" ) ;
+accessor        = [ visibility ] ( "get" | "set" | "init" ) ( ";" | foundation-block | "=>" expression ";" ) ;
 constructor     = { visibility } ident "(" [ parameter { "," parameter } ] ")" foundation-block ;
 (* The constructor name must match its containing class. Static classes allow static methods only. *)
 foundation-function = { modifier } type ident "(" [ parameter { "," parameter } ] ")"
@@ -335,7 +335,9 @@ for-initializer = ( "var" ident "=" expression )
                 | statement-expressions ;
 statement-expressions = statement-expression { "," statement-expression } ;
 statement-expression = assignment-expression | call-expression | update-expression | new-expression ;
-new-expression  = "new" type "(" [ argument { "," argument } ] ")" ;
+new-expression  = "new" type ( "(" [ argument { "," argument } ] ")" [ object-initializer ] | object-initializer ) ;
+object-initializer = "{" [ member-initializer { "," member-initializer } [ "," ] ] "}" ;
+member-initializer = ident "=" ( expression | object-initializer ) ;
 update-expression = ( "++" | "--" ) expression | expression ( "++" | "--" ) ;
 expression      = literal | qualified-ident | "this" | new-expression | "(" expression ")"
                 | expression "." ident
@@ -360,7 +362,9 @@ execution remain required Phase 2 work. This checkpoint is not first-release sco
 
 Functions, constructors, and static/instance methods support overloads,
 public/internal/private checks, named and optional arguments, and int32-to-int64
-widening. The [object contract](contracts/objects.md) covers fields, construction, and
+widening. [Object initialization](contracts/initialization.md) adds ordered assignments,
+nested existing objects, required members, and init-only accessors. The
+[object contract](contracts/objects.md) covers fields, construction, and
 non-null initialization. [Property accessors](contracts/properties.md) preserve ordinary
 read/write evaluation and use source-level statement checks. See the
 [function contract](contracts/functions.md) and [control-flow contract](contracts/control-flow.md)

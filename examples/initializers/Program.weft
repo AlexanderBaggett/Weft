@@ -1,0 +1,30 @@
+namespace Demo;
+
+public class Address
+{
+    public required string City { get; init; }
+}
+
+public class Order
+{
+    public required string Customer { get; init; }
+    public required Address Shipping { get; init; }
+    public int Quantity { get; set; }
+    public string Description => Customer + ":" + Shipping.City + ":" + Quantity;
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        var order = new Order
+        {
+            Customer = "Ada",
+            Shipping = new Address { City = "London" },
+            Quantity = 3,
+        };
+        Print(order.Description);
+        order.Quantity++;
+        Print(order.Description);
+    }
+}

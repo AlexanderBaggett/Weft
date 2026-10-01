@@ -39,7 +39,8 @@ public sealed record IrFieldRead(FieldSymbol Field, IrExpression Receiver, Sourc
 public sealed record IrFieldWrite(FieldSymbol Field, IrExpression Receiver, IrExpression Value, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
 public sealed record IrFieldUpdate(FieldSymbol Field, IrExpression Receiver, string Operator, bool Postfix, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
 // Bindings execute left to right, then Value. Their locals exist only inside this expression.
-public sealed record IrSequence(ImmutableArray<IrVariable> Bindings, IrExpression Value, SourceOrigin Origin) : IrExpression(Value.Type, Origin);
+// An Initializing identity must be the first binding's freshly constructed object.
+public sealed record IrSequence(ImmutableArray<IrVariable> Bindings, IrExpression Value, SourceOrigin Origin, VariableSymbol? Initializing = null) : IrExpression(Value.Type, Origin);
 public sealed record IrConditional(IrExpression Condition, IrExpression WhenTrue, IrExpression WhenFalse,
     WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrConvert(IrExpression Operand, WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);

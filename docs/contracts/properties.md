@@ -25,7 +25,8 @@ class Inventory
 }
 ```
 
-A property may have a getter, a setter, or both. Accessor bodies support ordinary
+A property may have a getter, a setter, or both. [Init accessors](initialization.md)
+provide construction-only assignment as an alternative to a setter. Accessor bodies support ordinary
 statements, including early returns. A getter returns the property type; a setter
 returns void and has an implicit parameter named `value` of that type. Both accessors
 can have expression bodies. A property expression body is a getter. A custom setter
@@ -57,7 +58,8 @@ before the constructor body. Initializers can use already constructed objects, b
 cannot access the new object's `this`, fields, properties, or instance methods.
 
 Non-null string/class auto-properties must be assigned on every completing constructor
-path, just like [non-null fields](objects.md). Reading one before assignment or letting
+path, just like [non-null fields](objects.md), unless `required` explicitly defers the
+assignment to a checked [object initializer](initialization.md). Reading one before assignment or letting
 `this` escape early is an error. Constructor accesses to this object's auto-properties
 use their backing storage directly. Custom accessors are ordinary method calls: they
 cannot be used to bypass the existing initialization/escape check. Inferring field
@@ -103,7 +105,7 @@ receiver reassignment, named arguments, loops, short-circuiting, and signed limi
 
 WF2023 identifies a missing required accessor; WF2024 identifies invalid accessor
 structure or accessibility. Existing WF2011, WF2019, and WF2022 cover access, public
-contracts, and non-null construction. Static properties/type initialization, `init`
-accessors/object initializers, indexers, inheritance/interfaces, and complete generic/
-nullable types remain required work under their original tasks. Unsupported static
-and init properties currently receive WF2009.
+contracts, and non-null construction. [Object initializers and init accessors](initialization.md)
+are now executable. Static properties/type initialization, indexers, inheritance/
+interfaces, and complete generic/nullable types remain required work under their
+original tasks. Unsupported static properties currently receive WF2009.

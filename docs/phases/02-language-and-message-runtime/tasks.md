@@ -172,7 +172,7 @@ See the [object contract](../../contracts/objects.md).
 
 ### Instance-property checkpoint — 2026-09-30
 
-Worktree based on `acd4b92`, covering further portions of P02-003/011/032. Instance
+Committed and pushed as `b661315`, covering further portions of P02-003/011/032. Instance
 properties support automatic storage, custom/expression-bodied accessors, restricted
 accessibility, getter-only constructor assignment, and non-null initialization checks.
 Compound assignment and prefix/postfix updates preserve receiver/getter/RHS/setter
@@ -195,11 +195,42 @@ See the [property contract](../../contracts/properties.md) and runnable
   and `A:3`. Documentation/example review is complete, all 44 Markdown documents have
   valid relative link targets, and `git diff --check` passes. Hosted CI remains deferred.
 
-Static/init properties, object initializers, indexers, models/records, and remaining
-type features stay required work. No parent task is marked complete by this checkpoint.
+At this checkpoint, static/init properties, object initializers, indexers, models/records,
+and remaining type features were still required work; the next checkpoint advances
+initialization. No parent task is marked complete by this property checkpoint.
 
-**Next:** continue P02-003 with remaining property/construction forms, models, records
-and their specified construction/equality behavior. Generic/interface/nullable types and complete public
+### Object-initializer checkpoint — 2026-09-30
+
+Worktree based on `b661315`, extending P02-003/011/032. Object initializers run after
+construction with source-ordered member assignments and enclosing lexical scope.
+Nested member initializers mutate existing objects. Automatic/custom init accessors
+restrict writes to construction; required fields/properties make caller assignments
+explicit. Non-null constructor and initializer checks prevent reads/escapes of
+incomplete reference storage. Shared IR marks the fresh initialization identity and
+checks init call authority. See the [initialization contract](../../contracts/initialization.md)
+and runnable [example](../../../examples/initializers/Program.weft).
+
+- `dotnet test Weft.slnx --no-restore`: **297 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Seven new executable conformance programs bring the case count to 46. Thirty-nine
+  initialization binding/IR checks cover required obligations, incomplete references,
+  access, readonly/init authority, nested targets, and constructor identity.
+- Independent agent review found two issues: empty nested initializers received a
+  read check despite emitting no reads, and malformed constructors could return an
+  existing object while retaining init privileges. Both are fixed with regression
+  coverage and independent rechecks; no findings remain. Constructor IR must allocate
+  its receiver first, preserve its identity, and return that receiver.
+- CLI runs of the initializer example on both backends printed `Ada:London:3` and
+  `Ada:London:4`. Documentation/example review is complete; all 45 Markdown documents
+  have valid relative link targets and `git diff --check` passes. Hosted CI remains
+  deferred.
+
+Constructor chaining, static initialization, collection/indexer initialization,
+models/records, and broader type integration remain required work. No parent task
+is marked complete.
+
+**Next:** continue P02-003 with constructor chaining, models, records, and their
+specified construction/equality behavior. Generic/interface/nullable types and complete public
 project contracts remain under their original tasks before services and shared
 middleware integration. Preserve the accepted pipeline syntax; its graph/project binding remains
 owned by P03-001 and P06-001/003. Append new work with unused task IDs when scope grows.

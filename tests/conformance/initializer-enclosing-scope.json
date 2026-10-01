@@ -1,0 +1,7 @@
+{
+  "id": "initializer-enclosing-scope",
+  "sources": {
+    "main.weft": "class Item { public int Value { get; init; } }\nint Pair(int first, int second) => first * 10 + second;\nclass Maker {\n    private int Value = 3;\n    public Item Make() => new Item { Value = this.Value + Value };\n}\nvoid Main() {\n    var n = 1;\n    var a = new Item { Value = Pair(second: n++, first: ++n) }; Print(a.Value); Print(n);\n    var b = new Maker().Make(); Print(b.Value);\n    Print(false ? new Item { Value = ++n }.Value : n);\n    var original = new Item { Value = 7 };\n    original = new Item { Value = original.Value + 2 }; Print(original.Value);\n}\n"
+  },
+  "stdout": "31\n3\n6\n3\n9\n"
+}

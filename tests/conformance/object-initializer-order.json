@@ -1,0 +1,7 @@
+{
+  "id": "object-initializer-order",
+  "sources": {
+    "main.weft": "int Mark(string name, int value) { Print(name); return value; }\nclass Order {\n    public int First = Mark(\"field\", 1);\n    public int Count { get; init; } = Mark(\"property\", 2);\n    private int total;\n    public int Total { get => total; init { Print(\"init:\" + value); total = value; } }\n    public Order(int n = 0) { Print(\"constructor:\" + n); }\n}\nvoid Main() {\n    var order = new Order(Mark(\"argument\", 4)) { First = Mark(\"first\", 5), Total = Mark(\"total\", 6), Count = Mark(\"count\", 7), };\n    Print(order.First); Print(order.Total); Print(order.Count);\n    new Order { Count = 8 }; new Order {};\n}\n"
+  },
+  "stdout": "argument\nfield\nproperty\nconstructor:4\nfirst\ntotal\ninit:6\ncount\n5\n6\n7\nfield\nproperty\nconstructor:0\nfield\nproperty\nconstructor:0\n"
+}

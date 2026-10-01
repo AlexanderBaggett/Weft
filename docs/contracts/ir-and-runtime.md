@@ -51,6 +51,14 @@ value type. Shared traversal discovers helpers inside branches, arguments, and
 sequences. Property metadata remains available in binding results; auto-properties
 use compiler-owned fields with ordinary initialization rules. See [properties](properties.md).
 
+Object initializers use `IrSequence.Initializing` to identify the first binding's
+fresh constructor result. Constructors must start by allocating their receiver and
+return only that receiver. The sequence yields that same object after ordered member
+writes. The validator authorizes init accessor calls only on that identity or the
+current receiver in a constructor/init accessor, and prevents identity reassignment.
+Required member obligations and incomplete-reference checks run before lowering;
+field/property/function metadata retain required/init markers. See [initialization](initialization.md).
+
 The [validator](../../src/Weft.Compiler/IR/IrValidator.cs) checks function/local identity,
 scope, portable types, constant representations, operator signatures, call signatures,
 intrinsic registration, class/field ownership, receiver signatures, readonly writes,

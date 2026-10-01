@@ -1,0 +1,7 @@
+{
+  "id": "init-accessor-construction",
+  "sources": {
+    "main.weft": "class Box {\n    private readonly int stored;\n    public int Number { get => stored; init { stored = value * 2; } }\n    public int Copy { get; init; }\n    public int Combined { init { Number = value; Copy = Number + 1; } }\n    public Box(int n = 1) { Number = n; Copy = 3; }\n}\nvoid Main() {\n    var a = new Box(4); Print(a.Number); Print(a.Copy);\n    var b = new Box { Combined = 5 }; Print(b.Number); Print(b.Copy);\n}\n"
+  },
+  "stdout": "8\n3\n10\n11\n"
+}

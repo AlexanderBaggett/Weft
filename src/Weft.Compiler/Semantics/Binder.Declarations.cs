@@ -58,11 +58,11 @@ public sealed partial class Binder
             if (declaration is FieldSyntax field && owner is not null)
             {
                 var visibility = DeclarationVisibility(field.Modifiers, Visibility.Private, true, field.Location);
-                foreach (var modifier in field.Modifiers.Where(m => m is not ("public" or "internal" or "private" or "readonly")))
+                foreach (var modifier in field.Modifiers.Where(m => m is not ("public" or "internal" or "private" or "readonly" or "required")))
                     diagnostics.Error("WF2009", $"Field modifier '{modifier}' requires a later declaration pass.", field.Location);
                 if (types[owner].IsStatic) diagnostics.Error("WF2012", "An instance field cannot belong to a static class.", field.Location);
                 if (fields[owner].Any(f => f.Symbol.Name == field.Name)) diagnostics.Error("WF2002", $"Duplicate field '{field.Name}'.", field.Location);
-                fields[owner].Add((new(nextSymbol++, field.Name, Nominal(owner), ResolveType(field.Type, false), field.Location, visibility, field.Modifiers.Contains("readonly")), field.Initializer));
+                fields[owner].Add((new(nextSymbol++, field.Name, Nominal(owner), ResolveType(field.Type, false), field.Location, visibility, field.Modifiers.Contains("readonly"), field.Modifiers.Contains("required")), field.Initializer));
                 continue;
             }
             if (declaration is ConstructSyntax construct)
@@ -80,7 +80,7 @@ public sealed partial class Binder
             var visibilityFunction = DeclarationVisibility(function.Modifiers, owner is null ? Visibility.Internal : Visibility.Private, owner is not null, function.Location);
             if (owner is not null && types[owner].IsStatic && !function.Modifiers.Contains("static"))
                 diagnostics.Error("WF2012", "A method in a static class must be declared static.", function.Location);
-            if (function.Modifiers.Contains("readonly") || function.IsConstructor && function.Modifiers.Any(m => m is not ("public" or "internal" or "private")))
+            if (function.Modifiers.Any(m => m is "readonly" or "required") || function.IsConstructor && function.Modifiers.Any(m => m is not ("public" or "internal" or "private")))
                 diagnostics.Error("WF2012", "Invalid method or constructor modifier.", function.Location);
             var parameters = ImmutableArray.CreateBuilder<VariableSymbol>();
             var optionalSeen = false;
@@ -103,7 +103,7 @@ public sealed partial class Binder
             var receiver = instance ? new VariableSymbol(nextSymbol++, "this", Nominal(owner!), function.Location) : null;
             var returned = function.IsConstructor ? Nominal(owner!) : ResolveType(function.ReturnType, true);
             var symbol = new FunctionSymbol(nextSymbol++, Qualify(owner ?? ns, function.IsConstructor ? ".ctor" : function.Name), returned,
-                parameters.ToImmutable(), function.Location, visibilityFunction, owner, receiver, function.IsConstructor);
+                parameters.ToImmutable(), function.Location, visibilityFunction, owner, receiver, function.IsConstructor, function.IsInitAccessor);
             if (!functions.TryGetValue(symbol.Name, out var overloads)) functions.Add(symbol.Name, overloads = []);
             var duplicate = overloads.FirstOrDefault(other => other.Parameters.Select(p => p.Type).SequenceEqual(symbol.Parameters.Select(p => p.Type)));
             if (duplicate is not null || types.ContainsKey(symbol.Name) || namespaces.Contains(symbol.Name))

@@ -1,0 +1,7 @@
+{
+  "id": "nested-object-initializers",
+  "sources": {
+    "main.weft": "class Point { public int X; public int Y { get; set; } }\nclass Holder {\n    public readonly Point Point = new Point();\n    public int Reads;\n    public Point Current { get { Reads++; Print(\"getter\"); return Point; } }\n}\nvoid Main() {\n    var holder = new Holder { Current = { X = 2, Y = 3 } };\n    Print(holder.Point.X); Print(holder.Point.Y); Print(holder.Reads);\n    var empty = new Holder { Current = {} }; Print(empty.Reads);\n    var replaced = new Holder { Point = { X = 4, Y = 5 } }; Print(replaced.Point.X + replaced.Point.Y);\n}\n"
+  },
+  "stdout": "getter\ngetter\n2\n3\n2\n0\n9\n"
+}
