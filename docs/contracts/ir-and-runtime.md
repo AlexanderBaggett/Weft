@@ -4,9 +4,11 @@
 
 The initial typed IR is [IrNodes.cs](../../src/Weft.Compiler/IR/IrNodes.cs). It contains
 functions, block scopes, initialized locals, assignments, returns, branches, loops,
-typed constants/reads/operators/calls, prefix/postfix local updates, explicit int32-to-int64 conversions, and versioned intrinsic calls. Executable types
-are void, bool, int32, int64, and string. The type model also names the future array,
-nullable, nominal, generic, signed/unsigned integer widths, char, float32/float64,
+typed constants/reads/operators/calls, prefix/postfix updates, explicit int32-to-int64
+conversions, and versioned intrinsic calls. Class declarations, construction, fields,
+and method receivers are also explicit. Executable types are void, bool, int32, int64,
+string, and ordinary nominal class references. The type model also names the future
+array, nullable, generic, signed/unsigned integer widths, char, float32/float64,
 decimal, and decimal128 forms. These numeric identities follow the
 [numeric contract](numeric-types.md); adding a type identity is not its implementation.
 Unsupported semantic passes
@@ -25,16 +27,26 @@ The first Phase 2 extension binds overloaded functions and static methods. Symbo
 retain visibility, containing type, parameter names/defaults, and signature locations.
 `IrCall.Arguments` is in written evaluation order; `ParameterOrder` maps the resulting
 values to parameters. Both emitters use shared [call adapter discovery](../../src/Weft.Compiler/Backends/CallAdapters.cs)
-to emit static reordering helpers. New expressions/statements containing calls must
-extend that traversal along with the validator and emitters. Optional constants keep
+to emit static reordering helpers. Instance receivers evaluate before arguments.
+New expressions/statements must extend shared [IR traversal](../../src/Weft.Compiler/IR/IrTraversal.cs)
+along with the validator and emitters; both call and temporary discovery use it. Optional constants keep
 the declaration and call origin. See [function contracts](functions.md).
 Compound assignments reuse typed reads, binary operations, and assignments; the old
 local value is evaluated before the right-hand side. `IrUpdate` retains prefix/postfix
 result behavior and validates its target's scope and integer type.
 
+`IrClass` and `FieldSymbol` describe reference objects and stable field identities.
+Constructors are factory functions; `IrAllocate` is restricted to the corresponding
+constructor. `IrFieldRead`/`IrFieldWrite`/`IrFieldUpdate` carry explicit receivers.
+`IrSequence` contains one or more scoped initialized temporaries followed by a value,
+preserving target capture and old-field reads before right-hand effects. Its locals
+cannot escape the expression in validated IR. Both emitters use typed static sequence
+helpers and method-local temporaries. See the [object contract](objects.md).
+
 The [validator](../../src/Weft.Compiler/IR/IrValidator.cs) checks function/local identity,
 scope, portable types, constant representations, operator signatures, call signatures,
-intrinsic registration, return/branch types, and fallthrough. Invalid IR is a compiler
+intrinsic registration, class/field ownership, receiver signatures, readonly writes,
+return/branch types, and fallthrough. Invalid IR is a compiler
 diagnostic at its source origin and must not reach code generation. ABI and required
 operation signatures are checked before building an artifact.
 

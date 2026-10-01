@@ -54,7 +54,7 @@ public static class EntryPoint
     public static FunctionSymbol? Resolve(IrModule module, string name, DiagnosticBag diagnostics)
     {
         var named = module.Functions.Where(f => f.Symbol.Name == name).ToArray();
-        var candidates = named.Where(f => f.Symbol.Parameters.Length == 0 && (f.Symbol.ReturnType == WeftType.Void || f.Symbol.ReturnType == WeftType.Int32)).ToArray();
+        var candidates = named.Where(f => f.Symbol.Receiver is null && !f.Symbol.IsConstructor && f.Symbol.Parameters.Length == 0 && (f.Symbol.ReturnType == WeftType.Void || f.Symbol.ReturnType == WeftType.Int32)).ToArray();
         var function = candidates.Length == 1 ? candidates[0] : named.FirstOrDefault();
         var location = function?.Origin.Location ?? module.Functions.FirstOrDefault()?.Origin.Location ?? new SourceLocation(module.Name, 0, 0, 1, 1);
         if (candidates.Length != 1 || function is null)

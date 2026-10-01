@@ -1,6 +1,6 @@
 # Phase 02: Language foundation and message runtime
 
-**Status:** In progress — ordinary functions/static methods and structured control flow (P02-001/002).
+**Status:** In progress — ordinary functions, classes, construction, and structured control flow (P02-001/002/003).
 
 **Outcome:** Implement the ordinary language, standard-library foundation, async/message lifetime machinery, and service/receiver runtime behavior on both platforms.
 
@@ -118,7 +118,7 @@ complete by this checkpoint; the full release scope is unchanged.
 
 ### Update-operator checkpoint — 2026-09-30
 
-Worktree based on `e567947`, covering further portions of P02-002/008/011/032.
+Committed as `6fe0f95`, covering further portions of P02-002/008/011/032.
 Prefix/postfix increment/decrement and arithmetic compound assignments now execute
 on both backends for current local/parameter types. Shared binary binding preserves
 conversion checks and uses existing runtime division/remainder contracts. Old-value
@@ -136,12 +136,42 @@ limits are explicit. String `+=` shares ordinary string concatenation.
   reordered named arguments, nested string updates, and signed-limit wrapping.
 - `git diff --check` passes. Hosted CI remains deferred.
 
-Object/indexer targets, the full numeric set, checked operations, matching, and
+Property/indexer targets, the full numeric set, checked operations, matching, and
 remaining expression forms remain within their original Phase 2 tasks. The user's
-current milestone workflow is independent review followed by a local commit.
+current milestone workflow is independent agent review followed by commit and push.
+Both the control-flow and update-operator checkpoints are pushed to `master`.
 
-**Next:** continue P02-001/003 with ordinary classes/models/records, construction and
-field/property access, using these method symbols and call rules. Extend instance
-receiver evaluation and public type contracts before integrating services and shared
-middleware. Preserve the accepted pipeline syntax; its graph/project binding remains
+### Ordinary-class checkpoint — 2026-09-30
+
+Worktree based on `6fe0f95`, covering portions of P02-001/003/011/032. Both backends
+execute ordinary classes, overloaded constructors, instance/static methods, fields,
+readonly checks, identity equality, and alias mutation. Constructor arguments run
+before ordered field initializers; instance receivers precede written-order arguments.
+Compound field updates capture the receiver and old value once before right-hand
+side effects. Non-null reference fields must be initialized before construction
+completes or `this` escapes. Public signatures cannot expose an internal class.
+See the [object contract](../../contracts/objects.md).
+
+- `dotnet test Weft.slnx --no-restore`: **193 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Five new class conformance programs specify independent outputs for both backends;
+  a sixth case covers bare returns. There are now 34 executable conformance cases.
+  Class-binding checks cover invalid access, initialization/escape, static/instance
+  use, name hiding, public contracts, and malformed object IR.
+- Independent review found a bare-return traversal regression, field names falling
+  through to outer functions, and empty IR sequences allowing invalid statements.
+  All three are fixed with regression coverage; implementation re-review is clean.
+  Additional reviewer programs verify nested compound assignment, receiver reassignment,
+  named arguments containing updates, and constructor do/break/continue initialization.
+- CLI runs of the [class example](../../../examples/classes/Program.weft) on both
+  backends printed `50`, `50`, `true`, `false`, and `Ada` in order. Final documentation
+  and example review is complete; two wording clarifications were incorporated.
+- All 43 Markdown documents have valid relative link targets, and `git diff --check`
+  passes. Grammar, shared IR, and developer documentation preserve the remaining
+  release coverage. Hosted CI remains deferred.
+
+**Next:** continue P02-003 with properties, models, records and their specified
+construction/equality behavior. Generic/interface/nullable types and complete public
+project contracts remain under their original tasks before services and shared
+middleware integration. Preserve the accepted pipeline syntax; its graph/project binding remains
 owned by P03-001 and P06-001/003. Append new work with unused task IDs when scope grows.

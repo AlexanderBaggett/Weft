@@ -1,4 +1,4 @@
-# Functions and static methods
+# Functions and methods
 
 This is the first executable Phase 2 extension, under the accepted C# ordinary-code
 direction. It runs on .NET and JVM. The [functions example](../../examples/functions/Program.weft)
@@ -15,8 +15,8 @@ declaring class. Project-level `private`, conflicting modifiers, and instance me
 inside static classes are errors.
 
 All function signatures are collected before bodies are checked, so forward calls,
-recursion, and calls between source files work. Local variables shadow callable/type
-names. Once a qualified name resolves to a nearer type or namespace, a missing member
+recursion, and calls between source files work. Local variables and instance fields
+shadow callable/type names. Once a qualified name resolves to a nearer type or namespace, a missing member
 does not cause lookup to continue through an unrelated outer declaration.
 
 Method symbols retain visibility, declaring type, parameter names/types/defaults,
@@ -50,11 +50,11 @@ Defaults do not participate in ranking the supplied arguments.
 [C# overload resolution](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/expressions#1264-overload-resolution)
 
 The compiler currently executes `bool`, `int`/`int32`, `long`/`int64`, and `string`
-parameters/results, plus void returns. Int-to-long widening also works in assignments,
+parameters/results, ordinary class references, and void returns. Int-to-long widening also works in assignments,
 initializers, returns, and mixed integer expressions. Other conversions remain in
-P02-004/008. Optional defaults currently support literals and constant expressions using
-these types, with checked integer arithmetic; overflow, zero division, and function
-calls are invalid defaults. Required parameters must precede optional ones.
+P02-004/008. Optional defaults currently support bool, int32, int64, and string literals
+and constant expressions, with checked integer arithmetic; class references, overflow,
+zero division, and function calls are invalid defaults. Required parameters must precede optional ones.
 
 ## Shared code generation and checks
 
@@ -69,7 +69,9 @@ mappings. The configured entry selects a parameterless void/int function or stat
 method even if other overloads were declared first. Local conformance programs check
 observable traces and results on each backend.
 
-Instance classes/models/records, constructors, fields/properties, generic methods,
-imports, separate-project references, and complete numeric/nullable conversions remain
+Ordinary classes, fields, constructors, and instance methods are now executable; see
+the [object contract](objects.md) for reference semantics, initialization, and receiver
+evaluation. Models/records, properties, generic methods, imports, separate-project
+references, and complete numeric/nullable conversions remain
 required work in P02-001/003/004/006/008 and Phase 6. P02-001 remains open until its
 remaining declaration and public-contract work is complete.

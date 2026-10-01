@@ -21,15 +21,27 @@ public sealed partial class JvmEmitter
         writer.WriteLine($"weft.runtime.RuntimeContract.requireAbi({Quote(module.RuntimeAbi)});");
         writer.WriteLine(entry.ReturnType == WeftType.Void ? $"f_{entry.Id}();" : $"System.exit(f_{entry.Id}());");
         writer.WriteLine("}");
+        foreach (var type in module.Classes.IsDefault ? [] : module.Classes)
+        {
+            writer.WriteLine($"private static final class {ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name))} {{", new(type.Symbol.Location));
+            foreach (var field in type.Fields) writer.WriteLine($"public {Type(field.Type)} m_{field.Id};", new(field.Location));
+            writer.WriteLine("}");
+        }
+        foreach (var (ignored, result) in ObjectEmission.Sequences(module))
+            writer.WriteLine($"private static {Type(result)} {ObjectEmission.SequenceName(ignored, result)}({Type(ignored)} ignored, {Type(result)} result) {{ return result; }}");
         foreach (var function in module.Functions)
         {
-            writer.WriteLine($"private static {Type(function.Symbol.ReturnType)} f_{function.Symbol.Id}({string.Join(", ", function.Symbol.Parameters.Select(p => $"{Type(p.Type)} v_{p.Id}"))})", function.Origin);
-            Statement(function.Body);
+            writer.WriteLine($"private static {Type(function.Symbol.ReturnType)} f_{function.Symbol.Id}({string.Join(", ", ObjectEmission.Parameters(function.Symbol).Select(p => $"{Type(p.Type)} v_{p.Id}"))})", function.Origin);
+            writer.WriteLine("{");
+            foreach (var temporary in ObjectEmission.Temporaries(function)) writer.WriteLine($"{Type(temporary.Type)} v_{temporary.Id};");
+            Statement(function.Body); writer.WriteLine("}");
         }
         foreach (var call in CallAdapters.Collect(module))
         {
             var parameters = string.Join(", ", call.Arguments.Select((argument, i) => $"{Type(argument.Type)} a_{i}"));
+            if (call.Receiver is not null) parameters = $"{Type(call.Receiver.Type)} receiver" + (parameters.Length > 0 ? ", " + parameters : "");
             var arguments = string.Join(", ", Enumerable.Range(0, call.Arguments.Length).Select(i => $"a_{call.ParameterOrder.IndexOf(i)}"));
+            if (call.Receiver is not null) arguments = "receiver" + (arguments.Length > 0 ? ", " + arguments : "");
             writer.WriteLine($"private static {Type(call.Type)} {CallAdapters.Name(call)}({parameters}) {{ {(call.Type == WeftType.Void ? "" : "return ")}f_{call.Function.Id}({arguments}); }}",
                 new(call.Origin.Location, "named-argument-adapter", call.Origin));
         }
@@ -82,6 +94,7 @@ public sealed partial class JvmEmitter
     private static string Type(WeftType type) => type.Kind switch
     {
         TypeKind.Void => "void", TypeKind.Bool => "boolean", TypeKind.Int32 => "int", TypeKind.Int64 => "long", TypeKind.String => "String",
+        TypeKind.Nominal => ObjectEmission.TypeName(type),
         _ => throw new InvalidOperationException($"Unsupported IR type '{type.Name}'.")
     };
     private static string Quote(string value)
@@ -96,9 +109,14 @@ public sealed partial class JvmEmitter
     private static string StatementExpression(IrExpression expression) => expression switch
     {
         IrAssign assign => $"v_{assign.Symbol.Id} = {Expression(assign.Value)}",
+        IrFieldWrite write => $"({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)}",
+        IrFieldUpdate update => FieldUpdate(update),
         IrUpdate update => Update(update),
         _ => Expression(expression)
     };
+    private static string FieldUpdate(IrFieldUpdate update) => update.Postfix
+        ? $"({Expression(update.Receiver)}).m_{update.Field.Id}{update.Operator}"
+        : $"{update.Operator}({Expression(update.Receiver)}).m_{update.Field.Id}";
     private static string Expression(IrExpression expression) => expression switch
     {
         IrConstant constant => constant.Value switch
@@ -109,6 +127,11 @@ public sealed partial class JvmEmitter
         },
         IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
         IrUpdate update => $"({Update(update)})",
+        IrAllocate allocated => $"new {Type(allocated.Type)}()",
+        IrFieldRead read => $"({Expression(read.Receiver)}).m_{read.Field.Id}",
+        IrFieldWrite write => $"(({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)})",
+        IrFieldUpdate update => $"({FieldUpdate(update)})",
+        IrSequence sequence => ObjectEmission.Sequence(sequence, Expression),
         IrRead read => $"v_{read.Symbol.Id}",
         IrConvert convert => $"((long)({Expression(convert.Operand)}))",
         IrAssign assign => $"(v_{assign.Symbol.Id} = {Expression(assign.Value)})",
@@ -116,7 +139,7 @@ public sealed partial class JvmEmitter
         IrBinary binary when binary.Left.Type == WeftType.String && binary.Operator is "==" or "!=" => $"({(binary.Operator == "!=" ? "!" : "")}({Expression(binary.Left)}).equals({Expression(binary.Right)}))",
         IrBinary binary when binary.Operator is "/" or "%" => $"weft.runtime.RuntimeContract.{(binary.Operator == "/" ? "divide" : "remainder")}({Expression(binary.Left)}, {Expression(binary.Right)})",
         IrBinary binary => $"({Expression(binary.Left)} {binary.Operator} {Expression(binary.Right)})",
-        IrCall call => $"{CallAdapters.Name(call)}({string.Join(", ", call.Arguments.Select(Expression))})",
+        IrCall call => $"{CallAdapters.Name(call)}({string.Join(", ", ObjectEmission.Arguments(call).Select(Expression))})",
         IrIntrinsic intrinsic => $"weft.runtime.RuntimeContract.{(intrinsic.Signature.Name == Intrinsics.Print.Name ? "writeLine" : "text")}({string.Join(", ", intrinsic.Arguments.Select(Expression))})",
         _ => throw new InvalidOperationException($"Unsupported IR expression {expression.GetType().Name}.")
     };

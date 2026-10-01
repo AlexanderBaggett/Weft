@@ -43,7 +43,9 @@ public enum Visibility { Private, Internal, Public }
 public sealed record ConstantValue(object Value, WeftType Type);
 public sealed record VariableSymbol(int Id, string Name, WeftType Type, SourceLocation Location, ConstantValue? Default = null);
 public sealed record FunctionSymbol(int Id, string Name, WeftType ReturnType, ImmutableArray<VariableSymbol> Parameters,
-    SourceLocation Location, Visibility Visibility = Visibility.Internal, string? ContainingType = null);
+    SourceLocation Location, Visibility Visibility = Visibility.Internal, string? ContainingType = null, VariableSymbol? Receiver = null, bool IsConstructor = false);
+public sealed record FieldSymbol(int Id, string Name, WeftType Owner, WeftType Type, SourceLocation Location,
+    Visibility Visibility = Visibility.Private, bool ReadOnly = false);
 public sealed record TypeSymbol(string Name, SourceLocation Location, Visibility Visibility = Visibility.Internal, bool IsStatic = false);
 
 public sealed class SymbolScope(SymbolScope? parent = null)

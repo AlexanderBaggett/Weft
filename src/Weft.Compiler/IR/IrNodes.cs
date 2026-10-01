@@ -4,7 +4,8 @@ using Weft.Compiler.Text;
 
 namespace Weft.Compiler.IR;
 
-public sealed record IrModule(string Name, ImmutableArray<IrFunction> Functions, ImmutableArray<IntrinsicSignature> RequiredIntrinsics, string RuntimeAbi);
+public sealed record IrModule(string Name, ImmutableArray<IrFunction> Functions, ImmutableArray<IntrinsicSignature> RequiredIntrinsics, string RuntimeAbi, ImmutableArray<IrClass> Classes = default);
+public sealed record IrClass(TypeSymbol Symbol, ImmutableArray<FieldSymbol> Fields);
 public sealed record IrFunction(FunctionSymbol Symbol, IrBlock Body, SourceOrigin Origin);
 public abstract record IrNode(SourceOrigin Origin);
 public abstract record IrStatement(SourceOrigin Origin) : IrNode(Origin);
@@ -29,7 +30,13 @@ public sealed record IrBinary(IrExpression Left, string Operator, IrExpression R
 // Arguments remain in written evaluation order. ParameterOrder maps each argument to
 // its destination parameter; default/empty means the identity order.
 public sealed record IrCall(FunctionSymbol Function, ImmutableArray<IrExpression> Arguments, SourceOrigin Origin,
-    ImmutableArray<int> ParameterOrder = default) : IrExpression(Function.ReturnType, Origin);
+    ImmutableArray<int> ParameterOrder = default, IrExpression? Receiver = null) : IrExpression(Function.ReturnType, Origin);
+public sealed record IrAllocate(WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
+public sealed record IrFieldRead(FieldSymbol Field, IrExpression Receiver, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
+public sealed record IrFieldWrite(FieldSymbol Field, IrExpression Receiver, IrExpression Value, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
+public sealed record IrFieldUpdate(FieldSymbol Field, IrExpression Receiver, string Operator, bool Postfix, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
+// Bindings execute left to right, then Value. Their locals exist only inside this expression.
+public sealed record IrSequence(ImmutableArray<IrVariable> Bindings, IrExpression Value, SourceOrigin Origin) : IrExpression(Value.Type, Origin);
 public sealed record IrConditional(IrExpression Condition, IrExpression WhenTrue, IrExpression WhenFalse,
     WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrConvert(IrExpression Operand, WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);

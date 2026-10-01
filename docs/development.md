@@ -1,9 +1,10 @@
 # Building and working on Weft
 
 Weft's first release still includes the full language on .NET and JVM. The current
-compiler includes the Phase 1 foundation and the first Phase 2 function work: ordinary
-functions, static helper classes, overloads, named/optional arguments, loops with
-break/continue, conditional expressions, update/compound-assignment operators, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
+compiler includes the Phase 1 foundation and Phase 2 ordinary-language work: functions,
+classes, constructors, fields, instance/static methods, overloads, named/optional
+arguments, loops with break/continue, conditionals, update/compound-assignment
+operators, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
 syntax representation and explicit not-yet-implemented diagnostics. They remain
 required work in the [phase trackers](phases/README.md).
 
@@ -55,9 +56,9 @@ an executable jar with its runtime included, plus a separately packaged runtime 
 Cancellation terminates CLI-owned compiler/program subprocesses as a process tree.
 
 The bootstrap supplies `Print` and `Log` as fallback output helpers. User functions
-resolve first, and local variables shadow callable or namespace names. Calling a local
-integer is a type error; a not-yet-supported member call is diagnosed rather than
-silently resolving an unrelated namespace function. An already-canceled tool invocation
+resolve first, and local variables and fields shadow callable or namespace names.
+Calling an integer local or field is a type error. Unknown members are diagnosed
+rather than silently resolving an unrelated namespace function. An already-canceled tool invocation
 does not launch a subprocess.
 
 The [function contract](contracts/functions.md) describes the current ordinary-call
@@ -71,6 +72,17 @@ dotnet run --project src/Weft.Cli -- run --project examples/functions --backend 
 Both runs print `price first`, `units second`, and `Total: 50`, in that order. The call
 uses out-of-order named arguments, int-to-long widening, and an omitted optional
 parameter. Static method visibility is checked by Weft before either host compiler.
+
+The [class example](../examples/classes/Program.weft) exercises construction, readonly
+fields, instance methods, alias mutation, and identity equality:
+
+```sh
+dotnet run --project src/Weft.Cli -- run --project examples/classes --backend dotnet
+dotnet run --project src/Weft.Cli -- run --project examples/classes --backend jvm
+```
+
+Each run prints `50`, `50`, `true`, `false`, and `Ada`. See the
+[object contract](contracts/objects.md) for initialization checks and remaining work.
 
 ## Initial manifest
 
@@ -124,4 +136,7 @@ WF2013 for invalid defaults/parameter order, WF2014 for invalid named arguments,
 WF2015 for ambiguous overloads. Duplicate signatures remain WF2002. Control flow adds
 WF2016 for jumps outside a loop, WF2017 for an unbraced declaration used as a branch/loop
 body, and WF1104 for multiple variables in a `var` for-initializer. See the
-[control-flow contract](contracts/control-flow.md).
+[control-flow contract](contracts/control-flow.md). Objects add WF2019 for a public
+contract exposing an internal class, WF2020 for invalid instance/static use, WF2021
+for a readonly field write, and WF2022 for incomplete reference-field initialization.
+See the [object contract](contracts/objects.md).

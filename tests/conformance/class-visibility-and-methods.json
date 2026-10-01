@@ -1,0 +1,7 @@
+{
+  "id": "class-visibility-and-methods",
+  "sources": {
+    "main.weft": "namespace Models {\n    public class Counter {\n        private int value;\n        private Counter(int initial) { value = initial; }\n        public static Counter Create(int value = 1) => new Counter(value);\n        private int Step(int amount) { value += amount; return value; }\n        public int Add(int amount = 1) => Step(amount);\n        public long Add(long amount) => value + amount;\n        public int Combine(int first, int second) => first * 10 + second;\n    }\n}\nvoid Main() {\n    Models.Counter c = Models.Counter.Create(); Print(c.Add()); Print(c.Add(3L));\n    var n = 0; Print(c.Combine(second: n++, first: ++n)); Print(n);\n}"
+  },
+  "stdout": "2\n5\n20\n2\n"
+}

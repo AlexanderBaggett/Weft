@@ -1,0 +1,7 @@
+{
+  "id": "class-field-evaluation",
+  "sources": {
+    "main.weft": "class Box { public int Value = 10; public string Text = \"A\"; }\nBox Get(Box box) { Print(\"receiver\"); return box; }\nint Change(Box box) { Print(\"rhs\"); box.Value = 3; return 3; }\nvoid Main() {\n    var box = new Box();\n    Print(Get(box).Value += Change(box)); Print(box.Value);\n    Print(Get(box).Value /= Change(box)); Print(box.Value);\n    Print(Get(box).Value++); Print(++Get(box).Value);\n    Print(Get(box).Text += (box.Text = \"B\")); Print(box.Text);\n    Print(false ? Get(box).Value += 100 : box.Value);\n    for (var i = 0; i < 2; Get(box).Value += 1, i++) {}\n    Print(box.Value);\n}"
+  },
+  "stdout": "receiver\nrhs\n13\n13\nreceiver\nrhs\n4\n4\nreceiver\n4\nreceiver\n6\nreceiver\nAB\nAB\n6\nreceiver\nreceiver\n8\n"
+}

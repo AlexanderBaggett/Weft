@@ -300,16 +300,19 @@ Contextual where possible (`from`, `on`, `after`, `mode`) to keep C# code portab
 
 ## Current executable grammar
 
-The parser gives ordinary functions and static method containers typed syntax nodes.
-Other declared
+The parser gives ordinary functions, classes, fields, constructors, and methods typed
+syntax nodes. Property bodies are represented but not yet bound. Other declared
 construct kinds retain their header and balanced token-group body plus the complete
 source text. Contextual keywords remain identifier tokens; declaration and block
 contexts decide their meaning. The binder emits WF2009 for unimplemented semantic
 passes, so balanced sketches never appear to have passed policy checking.
 
 ```ebnf
-foundation-unit = { namespace-decl | foundation-function | static-helper-class | structural-declaration } ;
-static-helper-class = { modifier } "static" "class" ident "{" { foundation-function } "}" ;
+foundation-unit = { namespace-decl | foundation-function | foundation-class | structural-declaration } ;
+foundation-class = { modifier } "class" ident "{" { foundation-function | foundation-field | constructor } "}" ;
+foundation-field = { modifier } type ident [ "=" expression ] ";" ;
+constructor     = { visibility } ident "(" [ parameter { "," parameter } ] ")" foundation-block ;
+(* The constructor name must match its containing class. Static classes allow static methods only. *)
 foundation-function = { modifier } type ident "(" [ parameter { "," parameter } ] ")"
                       ( foundation-block | "=>" expression ";" | ";" ) ;
 parameter       = type ident [ "=" constant-expression ] ;
@@ -328,9 +331,11 @@ for-initializer = ( "var" ident "=" expression )
                 | ( type ident "=" expression { "," ident "=" expression } )
                 | statement-expressions ;
 statement-expressions = statement-expression { "," statement-expression } ;
-statement-expression = assignment-expression | call-expression | update-expression ;
+statement-expression = assignment-expression | call-expression | update-expression | new-expression ;
+new-expression  = "new" type "(" [ argument { "," argument } ] ")" ;
 update-expression = ( "++" | "--" ) expression | expression ( "++" | "--" ) ;
-expression      = literal | qualified-ident | "(" expression ")"
+expression      = literal | qualified-ident | "this" | new-expression | "(" expression ")"
+                | expression "." ident
                 | ( "!" | "-" | "+" ) expression | update-expression
                 | expression binary-op expression
                 | expression "?" expression ":" expression
@@ -343,14 +348,17 @@ Precedence from lowest to highest is simple/compound assignment (right associati
 associative), OR, AND, equality,
 comparison, addition/subtraction, multiplication/division/remainder, unary/prefix update,
 member/call/postfix update.
-Currently executable types are void (return only), bool, int32/int, int64/long, string.
+Currently executable types are void (return only), bool, int32/int, int64/long, string,
+and ordinary class references.
 Numeric literals are decimal signed integer magnitudes with optional L suffix and
 underscores; minimum signed values are accepted through unary negation. The parser
 also represents generic/array/nullable type syntax; those forms and interpolation
 execution remain required Phase 2 work. This checkpoint is not first-release scope.
 
-Functions and static methods support overloads, public/internal/private checks, named
-and optional arguments, and int32-to-int64 widening. See the
+Functions, constructors, and static/instance methods support overloads,
+public/internal/private checks, named and optional arguments, and int32-to-int64
+widening. The [object contract](contracts/objects.md) covers fields, construction, and
+non-null initialization. See the
 [function contract](contracts/functions.md) and [control-flow contract](contracts/control-flow.md)
 for execution, scope, return checks, and current limitations. Project
 pipeline syntax is accepted; its graph execution remains Phase 3/6 work.

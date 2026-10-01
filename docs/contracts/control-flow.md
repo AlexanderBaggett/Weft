@@ -52,9 +52,9 @@ existing minimum-value and zero-divisor behavior. String `+=` uses the same form
 and concatenation as ordinary string `+`.
 
 The [C# compound-assignment specification](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/expressions#12224-compound-assignment)
-defines the evaluation order and conversion constraints. Current targets are locals
-and parameters. Updates to fields, properties, and indexed elements join their
-respective object/collection implementations; remaining numeric widths and checked
+defines the evaluation order and conversion constraints. Current targets are locals,
+parameters, and ordinary [instance fields](objects.md). Updates to properties and
+indexed elements join their respective object/collection implementations; remaining numeric widths and checked
 arithmetic remain P02-008. Bitwise/shift/coalescing assignments remain ordinary-expression
 work. No host-language permissive narrowing can change accepted Weft source.
 
@@ -73,7 +73,8 @@ keep written argument order. Optional parameter defaults can use conditional con
 expressions; all three operands must be valid constants, including the unselected arm.
 
 See the [C# conditional operator](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/conditional-operator).
-Nullable, generic, reference, and target-typed conditional conversions join the full
+Same-class reference arms use identity conversion. Nullable, generic, inheritance,
+and target-typed conditional conversions join the full
 conversion work in P02-004/006/008.
 
 ## Shared flow checks and backend behavior

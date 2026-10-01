@@ -1,0 +1,7 @@
+{
+  "id": "void-return",
+  "sources": {
+    "main.weft": "void Early(bool exit) { if (exit) return; Print(\"body\"); return; } void Main() { Early(true); Early(false); Print(\"done\"); return; }"
+  },
+  "stdout": "body\ndone\n"
+}

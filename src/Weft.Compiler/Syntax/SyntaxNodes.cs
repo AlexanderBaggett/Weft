@@ -10,10 +10,14 @@ public sealed record TypeSyntax(string Name, ImmutableArray<TypeSyntax> Argument
 public abstract record DeclarationSyntax(string Name, SourceLocation Location) : SyntaxNode(Location);
 public sealed record NamespaceSyntax(string Namespace, bool FileScoped, ImmutableArray<DeclarationSyntax> Members, SourceLocation Location) : DeclarationSyntax(Namespace, Location);
 public sealed record ParameterSyntax(TypeSyntax Type, string Name, SourceLocation Location, ExpressionSyntax? Default = null) : SyntaxNode(Location);
-public sealed record StaticClassSyntax(string ClassName, ImmutableArray<DeclarationSyntax> Members,
+public sealed record ClassSyntax(string ClassName, ImmutableArray<DeclarationSyntax> Members,
     ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(ClassName, Location);
 public sealed record FunctionSyntax(string FunctionName, TypeSyntax ReturnType, ImmutableArray<ParameterSyntax> Parameters,
-    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(FunctionName, Location);
+    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false) : DeclarationSyntax(FunctionName, Location);
+public sealed record FieldSyntax(string FieldName, TypeSyntax Type, ExpressionSyntax? Initializer,
+    ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(FieldName, Location);
+public sealed record PropertySyntax(string PropertyName, TypeSyntax Type, GroupElement Body,
+    ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(PropertyName, Location);
 
 public enum ConstructKind { Origin, Model, Class, Record, Interface, Service, Receiver, Sink, Transform, Validate, Filter, Rule, Trigger, Ruleset, Suppress, Middleware, Pipeline, Ambient, Topic, Channel, Table, Flag, Canary, Kill, SwitchGroup, Scope, Use, Cache, Type, Extern, Outcome }
 // Lossless token trees retain nested code, match blocks, clauses, and source locations.
@@ -49,4 +53,5 @@ public sealed record ConditionalSyntax(ExpressionSyntax Condition, ExpressionSyn
     SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record ArgumentSyntax(ExpressionSyntax Expression, string? Name, SourceLocation Location) : SyntaxNode(Location);
 public sealed record CallSyntax(ExpressionSyntax Target, ImmutableArray<ArgumentSyntax> Arguments, SourceLocation Location) : ExpressionSyntax(Location);
+public sealed record NewSyntax(TypeSyntax Type, ImmutableArray<ArgumentSyntax> Arguments, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record MemberSyntax(ExpressionSyntax Target, string Member, SourceLocation Location) : ExpressionSyntax(Location);

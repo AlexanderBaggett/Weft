@@ -9,7 +9,7 @@ public sealed class FrontendTests
     [Theory]
     [InlineData("void Main() { var Log = 1; Log(\"hello\"); }", "WF2003")]
     [InlineData("void F() {} void Main() { var F = 1; F(); }", "WF2003")]
-    [InlineData("namespace Lib { void F() {} } void Main() { var Lib = 1; Lib.F(); }", "WF2009")]
+    [InlineData("namespace Lib { void F() {} } void Main() { var Lib = 1; Lib.F(); }", "WF2001")]
     public void A_local_call_target_cannot_fall_back_to_a_global_function(string text, string code)
     {
         var result = Compilation.Analyze("resolution", [new("resolution.weft", text)]);

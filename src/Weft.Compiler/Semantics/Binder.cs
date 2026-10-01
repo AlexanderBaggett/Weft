@@ -9,7 +9,7 @@ namespace Weft.Compiler.Semantics;
 
 public sealed record BindResult(IrModule? Module, ImmutableArray<Diagnostic> Diagnostics, ImmutableArray<FunctionSymbol> Functions, ImmutableArray<TypeSymbol> Types);
 
-public sealed class Binder
+public sealed partial class Binder
 {
     private readonly DiagnosticBag diagnostics = [];
     private readonly Dictionary<string, List<FunctionSymbol>> functions = new(StringComparer.Ordinal);
@@ -28,108 +28,60 @@ public sealed class Binder
         var inputs = trees.ToArray();
         foreach (var tree in inputs) diagnostics.AddRange(tree.Diagnostics);
         if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), [], []);
+        foreach (var tree in inputs) CollectTypes(tree.Declarations, "");
+        if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), [], types.Values.ToImmutableArray());
         foreach (var tree in inputs) Declare(tree.Declarations, "");
+        ValidatePublicContracts();
         if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray());
         var bound = ImmutableArray.CreateBuilder<IrFunction>();
         foreach (var (syntax, symbol, ns) in bodies)
         {
             currentFunction = symbol;
             currentNamespace = ns;
-            scope = new();
+            scope = new(); initializedFields = [];
+            var prefix = ImmutableArray.CreateBuilder<IrStatement>();
+            if (symbol.Receiver is not null)
+            {
+                if (!symbol.IsConstructor) scope.Declare(symbol.Receiver);
+                else
+                {
+                    var origin = new SourceOrigin(symbol.Location, "constructor-allocation");
+                    prefix.Add(new IrVariable(symbol.Receiver, new IrAllocate(symbol.Receiver.Type, origin), origin));
+                    bindingFieldInitializer = true;
+                    foreach (var (field, initializer) in fields[symbol.ContainingType!])
+                    {
+                        if (initializer is null) continue;
+                        var value = ConvertImplicit(BindExpression(initializer), field.Type);
+                        prefix.Add(new IrExpressionStatement(new IrFieldWrite(field, This(origin), value, new(initializer.Location)), new(initializer.Location)));
+                        initializedFields.Add(field.Id);
+                    }
+                    bindingFieldInitializer = false;
+                    scope.Declare(symbol.Receiver);
+                }
+            }
             foreach (var parameter in symbol.Parameters) if (!scope.Declare(parameter)) diagnostics.Error("WF2002", $"Duplicate parameter '{parameter.Name}'.", parameter.Location);
             if (syntax.Body is null) { diagnostics.Error("WF2009", $"Function '{symbol.Name}' requires a body in an executable project.", syntax.Location); continue; }
             foreach (var modifier in syntax.Modifiers)
                 if (modifier is "async" or "pure" or "idempotent" or "external") diagnostics.Error("WF2009", $"The '{modifier}' semantic pass is scheduled for Phase 2/4 and is not implemented yet.", syntax.Location);
             var body = BindBlock(syntax.Body);
+            if (symbol.IsConstructor)
+            {
+                prefix.AddRange(body.Statements);
+                if (ControlFlow.CanComplete(body))
+                {
+                    RequireInitialized(syntax.Location);
+                    prefix.Add(new IrReturn(This(new(syntax.Location)), new(syntax.Location, "constructor-result")));
+                }
+                body = body with { Statements = prefix.ToImmutable() };
+            }
             if (symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(body)) diagnostics.Error("WF2007", $"Not all paths in '{symbol.Name}' return '{symbol.ReturnType.Name}'.", syntax.Location);
             bound.Add(new(symbol, body, new(syntax.Location)));
         }
-        var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion);
+        var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion, types.Values.Where(t => !t.IsStatic).Select(t => new IrClass(t, fields[t.Name].Select(f => f.Symbol).ToImmutableArray())).ToImmutableArray());
         return new(module, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray());
     }
 
     private static string Qualify(string ns, string name) => string.IsNullOrEmpty(ns) ? name : ns + "." + name;
-    private void Declare(ImmutableArray<DeclarationSyntax> declarations, string ns, string? owner = null)
-    {
-        foreach (var declaration in declarations)
-        {
-            if (declaration is NamespaceSyntax space)
-            {
-                if (owner is not null) { diagnostics.Error("WF2012", "A namespace cannot be declared inside a class.", space.Location); continue; }
-                var fullNamespace = Qualify(ns, space.Name);
-                RegisterNamespace(fullNamespace, space.Location);
-                if (space.FileScoped) ns = fullNamespace;
-                else Declare(space.Members, fullNamespace);
-                continue;
-            }
-            if (declaration is StaticClassSyntax helper)
-            {
-                if (owner is not null) { diagnostics.Error("WF2009", "Nested type binding is not implemented yet.", helper.Location); continue; }
-                var typeVisibility = DeclarationVisibility(helper.Modifiers, Visibility.Internal, false, helper.Location);
-                foreach (var modifier in helper.Modifiers.Where(m => m is not ("public" or "internal" or "private" or "static")))
-                    diagnostics.Error("WF2012", $"Modifier '{modifier}' is invalid on a static class.", helper.Location);
-                var typeName = Qualify(ns, helper.Name);
-                var type = new TypeSymbol(typeName, helper.Location, typeVisibility, true);
-                if (!types.TryAdd(typeName, type) || functions.ContainsKey(typeName) || namespaces.Contains(typeName)) diagnostics.Error("WF2002", $"Duplicate declaration '{typeName}'.", helper.Location);
-                Declare(helper.Members, ns, typeName);
-                continue;
-            }
-            if (declaration is ConstructSyntax construct)
-            {
-                if (construct.Kind is ConstructKind.Model or ConstructKind.Class or ConstructKind.Record or ConstructKind.Interface)
-                {
-                    var type = new TypeSymbol(Qualify(ns, construct.Name), construct.Location);
-                    if (!types.TryAdd(type.Name, type)) diagnostics.Error("WF2002", $"Duplicate type '{type.Name}'.", type.Location);
-                }
-                diagnostics.Error("WF2009", $"'{construct.Kind}' syntax is represented, but its semantic/lowering pass is not implemented yet. This remains required release work.", construct.Location);
-                continue;
-            }
-            if (declaration is not FunctionSyntax function) continue;
-            var visibility = DeclarationVisibility(function.Modifiers,
-                owner is null ? Visibility.Internal : Visibility.Private, owner is not null, function.Location);
-            if (owner is not null && !function.Modifiers.Contains("static"))
-                diagnostics.Error("WF2012", "A method in a static class must be declared static.", function.Location);
-            var parameters = ImmutableArray.CreateBuilder<VariableSymbol>();
-            var optionalSeen = false;
-            foreach (var parameter in function.Parameters)
-            {
-                var type = ResolveType(parameter.Type, false);
-                ConstantValue? defaultValue = null;
-                if (parameter.Default is not null)
-                {
-                    optionalSeen = true;
-                    defaultValue = ConstantEvaluator.Evaluate(parameter.Default);
-                    if (defaultValue is null)
-                        diagnostics.Error("WF2013", "A parameter default must be a supported constant without overflow or division by zero.", parameter.Default.Location);
-                    else if (defaultValue.Type == WeftType.Int32 && type == WeftType.Int64)
-                        defaultValue = new((long)(int)defaultValue.Value, WeftType.Int64);
-                    else Require(type, defaultValue.Type, parameter.Default.Location);
-                }
-                else if (optionalSeen) diagnostics.Error("WF2013", "Required parameters must precede optional parameters.", parameter.Location);
-                parameters.Add(new(nextSymbol++, parameter.Name, type, parameter.Location, defaultValue));
-            }
-            var symbol = new FunctionSymbol(nextSymbol++, Qualify(owner ?? ns, function.Name), ResolveType(function.ReturnType, true),
-                parameters.ToImmutable(), function.Location, visibility, owner);
-            if (!functions.TryGetValue(symbol.Name, out var overloads)) functions.Add(symbol.Name, overloads = []);
-            var duplicate = overloads.FirstOrDefault(other => other.Parameters.Select(p => p.Type).SequenceEqual(symbol.Parameters.Select(p => p.Type)));
-            if (duplicate is not null || types.ContainsKey(symbol.Name) || namespaces.Contains(symbol.Name))
-                diagnostics.Add(new("WF2002", $"Duplicate function signature '{symbol.Name}'. Return types, parameter names, and defaults do not distinguish overloads.", function.Location,
-                    Related: duplicate is null ? null : [duplicate.Location]));
-            else { overloads.Add(symbol); bodies.Add((function, symbol, ns)); }
-        }
-    }
-
-    private WeftType ResolveType(TypeSyntax syntax, bool allowVoid)
-    {
-        var type = WeftType.Builtin(syntax.Name);
-        if (type is null) { diagnostics.Error("WF2001", $"Unknown or not-yet-bound type '{syntax.Name}'.", syntax.Location); return WeftType.Error; }
-        if (syntax.Arguments.Length > 0 || syntax.ArrayRank > 0 || syntax.Nullable ||
-            type.Kind is not (TypeKind.Void or TypeKind.Bool or TypeKind.Int32 or TypeKind.Int64 or TypeKind.String))
-            diagnostics.Error("WF2009", $"Execution of type '{syntax.Name}' with these refinements is Phase 2 work and is not implemented yet.", syntax.Location);
-        if (!allowVoid && type == WeftType.Void) { diagnostics.Error("WF2003", "A value cannot have type void.", syntax.Location); return WeftType.Error; }
-        return type;
-    }
-
     private IrBlock BindBlock(BlockSyntax block)
     {
         var previous = scope;
@@ -164,12 +116,15 @@ public sealed class Binder
             case EmptySyntax: return new IrBlock([], origin);
             case BreakSyntax:
                 if (loopDepth == 0) diagnostics.Error("WF2016", "break requires an enclosing loop.", statement.Location);
+                if (constructionLoops.TryPeek(out var breakLoop)) breakLoop.Breaks.Add(initializedFields.ToHashSet());
                 return new IrBreak(origin);
             case ContinueSyntax:
                 if (loopDepth == 0) diagnostics.Error("WF2016", "continue requires an enclosing loop.", statement.Location);
+                if (constructionLoops.TryPeek(out var continueLoop)) continueLoop.Continues.Add(initializedFields.ToHashSet());
                 return new IrContinue(origin);
             case BlockSyntax block: return BindBlock(block);
             case VariableSyntax variable:
+                if (variable.Name == "this") diagnostics.Error("WF2012", "A local cannot be named this.", variable.Location);
                 var initializer = BindExpression(variable.Initializer);
                 var type = variable.Type is null ? initializer.Type : ResolveType(variable.Type, false);
                 initializer = ConvertImplicit(initializer, type);
@@ -178,6 +133,11 @@ public sealed class Binder
                 if (!scope.Declare(symbol)) diagnostics.Error("WF2002", $"Duplicate local '{variable.Name}'.", variable.Location);
                 return new IrVariable(symbol, initializer, origin);
             case ReturnSyntax returned:
+                if (currentFunction.IsConstructor)
+                {
+                    if (returned.Expression is not null) diagnostics.Error("WF2003", "A constructor return cannot specify a value.", returned.Location);
+                    RequireInitialized(returned.Location); return new IrReturn(This(origin), origin);
+                }
                 var value = returned.Expression is null ? null : BindExpression(returned.Expression);
                 if (value?.Type == WeftType.Void) diagnostics.Error("WF2003", "A void return cannot carry an expression; call it before returning.", statement.Location);
                 if (value is not null && value.Type != WeftType.Void) value = ConvertImplicit(value, currentFunction.ReturnType);
@@ -185,26 +145,44 @@ public sealed class Binder
                 return new IrReturn(value, origin);
             case ExpressionStatementSyntax expression:
                 var bound = BindExpression(expression.Expression);
-                if (bound.Type != WeftType.Error && bound is not (IrCall or IrIntrinsic or IrAssign or IrUpdate)) diagnostics.Error("WF2008", "Only calls, assignments, or increment/decrement operations may be expression statements.", expression.Location);
+                if (bound.Type != WeftType.Error && bound is not (IrCall or IrIntrinsic or IrAssign or IrUpdate or IrFieldWrite or IrFieldUpdate or IrSequence)) diagnostics.Error("WF2008", "Only calls, assignments, or increment/decrement operations may be expression statements.", expression.Location);
                 return new IrExpressionStatement(bound, origin);
             case IfSyntax conditional:
                 var condition = BindExpression(conditional.Condition); Require(WeftType.Bool, condition.Type, condition.Origin.Location);
-                return new IrIf(condition, BindNestedStatement(conditional.Then), conditional.Else is null ? null : BindNestedStatement(conditional.Else), origin);
+                var before = initializedFields.ToHashSet();
+                var then = BindNestedStatement(conditional.Then); var afterThen = initializedFields;
+                initializedFields = before;
+                var otherwise = conditional.Else is null ? null : BindNestedStatement(conditional.Else);
+                if (ControlFlow.CanComplete(then))
+                {
+                    if (otherwise is not null && !ControlFlow.CanComplete(otherwise)) initializedFields = afterThen;
+                    else initializedFields.IntersectWith(afterThen);
+                }
+                return new IrIf(condition, then, otherwise, origin);
             case WhileSyntax loop:
                 var test = BindExpression(loop.Condition); Require(WeftType.Bool, test.Type, test.Origin.Location);
-                return new IrWhile(test, BindLoopBody(loop.Body), origin);
+                var beforeWhile = initializedFields.ToHashSet(); var whileBody = BindLoopBody(loop.Body, out _);
+                initializedFields = beforeWhile;
+                return new IrWhile(test, whileBody, origin);
             case DoWhileSyntax loop:
-                var body = BindLoopBody(loop.Body);
+                var beforeDo = initializedFields.ToHashSet();
+                var body = BindLoopBody(loop.Body, out var doFrame);
+                if (ControlFlow.CanComplete(body)) doFrame.Continues.Add(initializedFields);
+                initializedFields = IntersectStates(doFrame.Continues, beforeDo);
                 var doTest = BindExpression(loop.Condition); Require(WeftType.Bool, doTest.Type, doTest.Origin.Location);
+                if (doFrame.Continues.Count > 0 && !ControlFlow.IsTrue(doTest)) doFrame.Breaks.Add(initializedFields);
+                initializedFields = IntersectStates(doFrame.Breaks, beforeDo);
                 return new IrDoWhile(body, doTest, origin);
             case ForSyntax loop:
                 var previous = scope; scope = new(previous);
                 var initializers = loop.Initializers.Select(BindStatement).ToImmutableArray();
                 var forTest = loop.Condition is null ? null : BindExpression(loop.Condition);
                 if (forTest is not null) Require(WeftType.Bool, forTest.Type, forTest.Origin.Location);
+                var beforeFor = initializedFields.ToHashSet();
                 var iterators = loop.Iterators.Select(expression =>
                     ((IrExpressionStatement)BindStatement(new ExpressionStatementSyntax(expression, expression.Location))).Expression).ToImmutableArray();
-                var forBody = BindLoopBody(loop.Body); scope = previous;
+                initializedFields = beforeFor.ToHashSet();
+                var forBody = BindLoopBody(loop.Body, out _); scope = previous; initializedFields = beforeFor;
                 return new IrFor(initializers, forTest, iterators, forBody, origin);
             case EffectScopeSyntax effect:
                 diagnostics.Error("WF2009", $"'{effect.Kind}' syntax is represented; its semantic/lowering pass is not implemented yet.", effect.Location);
@@ -213,11 +191,24 @@ public sealed class Binder
         }
     }
 
-    private IrStatement BindLoopBody(StatementSyntax body)
+    private sealed class ConstructionLoop
     {
-        loopDepth++;
+        public List<HashSet<int>> Breaks { get; } = [];
+        public List<HashSet<int>> Continues { get; } = [];
+    }
+    private readonly Stack<ConstructionLoop> constructionLoops = new();
+    private static HashSet<int> IntersectStates(List<HashSet<int>> states, HashSet<int> fallback)
+    {
+        if (states.Count == 0) return fallback.ToHashSet();
+        var result = states[0].ToHashSet();
+        foreach (var state in states.Skip(1)) result.IntersectWith(state);
+        return result;
+    }
+    private IrStatement BindLoopBody(StatementSyntax body, out ConstructionLoop frame)
+    {
+        loopDepth++; frame = new(); constructionLoops.Push(frame);
         var result = BindNestedStatement(body);
-        loopDepth--;
+        constructionLoops.Pop(); loopDepth--;
         return result;
     }
 
@@ -244,9 +235,20 @@ public sealed class Binder
                 }
                 else diagnostics.Error("WF2009", $"Execution of '{token.Kind}' / '{token.Text}' requires the corresponding Phase 2 semantic pass.", token.Location);
                 return Error(origin);
+            case NewSyntax created: return BindNew(created);
+            case MemberSyntax member:
+                var fieldRead = BindField(member);
+                if (fieldRead is not null) { RequireFieldInitialized(fieldRead.Field, fieldRead.Receiver, member.Location); return fieldRead; }
+                return Error(origin);
+            case NameSyntax { Name: "this" }:
+                if (currentFunction.Receiver is null || bindingFieldInitializer)
+                { diagnostics.Error("WF2020", "this requires an instance method or constructor body.", syntax.Location); return Error(origin); }
+                RequireInitialized(syntax.Location); return This(origin);
             case NameSyntax name:
                 var variable = scope.Lookup(name.Name);
                 if (variable is not null) return new IrRead(variable, origin);
+                var implicitField = BindImplicitField(name.Name, name.Location);
+                if (implicitField is not null) { RequireFieldInitialized(implicitField.Field, implicitField.Receiver, name.Location); return implicitField; }
                 diagnostics.Error("WF2001", $"Unknown variable '{name.Name}'.", name.Location);
                 return Error(origin);
             case UnarySyntax unary:
@@ -260,28 +262,19 @@ public sealed class Binder
                 if (unary.Operator == "!") Require(WeftType.Bool, operand.Type, unary.Location);
                 else if (!IsInteger(operand.Type)) diagnostics.Error("WF2003", $"Operator '{unary.Operator}' requires an integer.", unary.Location);
                 return new IrUnary(unary.Operator, operand, operand.Type, origin);
-            case UpdateSyntax update:
-                var updated = update.Operand is NameSyntax updateTarget ? scope.Lookup(updateTarget.Name) : null;
-                if (updated is null)
-                {
-                    diagnostics.Error("WF2005", "Increment/decrement requires a declared local or parameter.", update.Location);
-                    return Error(origin);
-                }
-                if (!IsInteger(updated.Type)) diagnostics.Error("WF2003", "Increment/decrement currently requires an int32 or int64 variable.", update.Location);
-                return new IrUpdate(updated, update.Operator, update.Postfix, origin);
-            case BinarySyntax { Operator: "=" or "+=" or "-=" or "*=" or "/=" or "%=" } binary:
-                var assigned = binary.Left is NameSyntax target ? scope.Lookup(target.Name) : null;
-                var rhs = BindExpression(binary.Right);
-                if (assigned is null) { diagnostics.Error("WF2005", "Assignment requires a declared local or parameter.", binary.Location); return Error(origin); }
-                if (binary.Operator != "=")
-                    rhs = BindBinary(new IrRead(assigned, new(binary.Left.Location)), binary.Operator[..1], rhs, origin);
-                rhs = ConvertImplicit(rhs, assigned.Type);
-                return new IrAssign(assigned, rhs, origin);
+            case UpdateSyntax update: return BindUpdate(update);
+            case BinarySyntax { Operator: "=" or "+=" or "-=" or "*=" or "/=" or "%=" } binary: return BindAssignment(binary);
             case BinarySyntax binary:
-                return BindBinary(BindExpression(binary.Left), binary.Operator, BindExpression(binary.Right), origin);
+                var left = BindExpression(binary.Left); var afterLeft = initializedFields.ToHashSet();
+                var right = BindExpression(binary.Right);
+                if (binary.Operator is "&&" or "||") initializedFields.IntersectWith(afterLeft);
+                return BindBinary(left, binary.Operator, right, origin);
             case ConditionalSyntax conditional:
                 var condition = BindExpression(conditional.Condition); Require(WeftType.Bool, condition.Type, condition.Origin.Location);
-                var whenTrue = BindExpression(conditional.WhenTrue); var whenFalse = BindExpression(conditional.WhenFalse);
+                var beforeArms = initializedFields.ToHashSet();
+                var whenTrue = BindExpression(conditional.WhenTrue); var afterTrue = initializedFields;
+                initializedFields = beforeArms;
+                var whenFalse = BindExpression(conditional.WhenFalse); initializedFields.IntersectWith(afterTrue);
                 if (IsInteger(whenTrue.Type) && IsInteger(whenFalse.Type) && whenTrue.Type != whenFalse.Type)
                 {
                     whenTrue = ConvertImplicit(whenTrue, WeftType.Int64); whenFalse = ConvertImplicit(whenFalse, WeftType.Int64);
@@ -362,18 +355,33 @@ public sealed class Binder
     {
         var origin = new SourceOrigin(call.Location);
         var fullName = NameOf(call.Target);
-        var arguments = call.Arguments.Select(a => BindExpression(a.Expression)).ToImmutableArray();
-        var root = call.Target;
-        while (root is MemberSyntax member) root = member.Target;
-        if (root is NameSyntax localName && scope.Lookup(localName.Name) is { } local)
+        IrExpression? receiver = null;
+        var explicitReceiver = false;
+        IReadOnlyList<FunctionSymbol> group;
+        bool foundName;
+        if (call.Target is MemberSyntax member && !IsStaticQualifier(member.Target, out var qualifier))
         {
-            if (call.Target is NameSyntax)
-                diagnostics.Error("WF2003", $"Local '{local.Name}' has non-callable type '{local.Type.Name}'.", call.Target.Location);
-            else diagnostics.Error("WF2009", $"Member calls on local '{local.Name}' require the Phase 2 member-binding pass.", call.Target.Location);
-            return Error(origin);
+            receiver = BindExpression(member.Target); explicitReceiver = true;
+            fullName = receiver.Type.Name + "." + member.Member;
+            group = functions.GetValueOrDefault(fullName) ?? []; foundName = true;
         }
-        if (arguments.Any(a => a.Type == WeftType.Error)) return Error(origin);
-        var group = FindFunctions(fullName, out var foundName);
+        else
+        {
+            if (call.Target is MemberSyntax qualified && IsStaticQualifier(qualified.Target, out qualifier)) fullName = qualifier + "." + qualified.Member;
+            if (call.Target is NameSyntax localName && scope.Lookup(localName.Name) is { } local)
+            {
+                diagnostics.Error("WF2003", $"Local '{local.Name}' has non-callable type '{local.Type.Name}'.", call.Target.Location); return Error(origin);
+            }
+            if (call.Target is NameSyntax fieldName && currentFunction.ContainingType is { } owner &&
+                fields[owner].FirstOrDefault(f => f.Symbol.Name == fieldName.Name).Symbol is { } field)
+            {
+                diagnostics.Error("WF2003", $"Field '{field.Name}' has non-callable type '{field.Type.Name}'.", call.Target.Location); return Error(origin);
+            }
+            if (call.Target is MemberSyntax) { group = functions.GetValueOrDefault(fullName) ?? []; foundName = true; }
+            else group = FindFunctions(fullName, out foundName);
+        }
+        var arguments = call.Arguments.Select(a => BindExpression(a.Expression)).ToImmutableArray();
+        if (arguments.Any(a => a.Type == WeftType.Error) || receiver?.Type == WeftType.Error) return Error(origin);
         if (!foundName && (fullName is "Print" or "Log"))
         {
             if (arguments.Length != 1) { diagnostics.Error("WF2006", $"'{fullName}' expects one argument.", call.Location); return Error(origin); }
@@ -382,6 +390,13 @@ public sealed class Binder
             intrinsics.Add(Intrinsics.Print);
             return new IrIntrinsic(Intrinsics.Print, [AsString(arguments[0])], origin);
         }
+        return BindInvocation(call, fullName, group, arguments, receiver, explicitReceiver);
+    }
+
+    private IrExpression BindInvocation(CallSyntax call, string fullName, IReadOnlyList<FunctionSymbol> group,
+        ImmutableArray<IrExpression> arguments, IrExpression? receiver = null, bool explicitReceiver = false)
+    {
+        var origin = new SourceOrigin(call.Location);
         if (group.Count == 0) { diagnostics.Error("WF2001", $"Unknown function '{fullName}'.", call.Location); return Error(origin); }
         var accessible = group.Where(f => f.Visibility != Visibility.Private || f.ContainingType == currentFunction.ContainingType).ToArray();
         if (accessible.Length == 0)
@@ -422,6 +437,16 @@ public sealed class Binder
             return Error(origin);
         }
         var selected = winners[0];
+        if (!selected.Function.IsConstructor)
+        {
+            if (selected.Function.Receiver is not null)
+            {
+                if (receiver is null && call.Target is NameSyntax && currentFunction.Receiver?.Type == selected.Function.Receiver.Type && !bindingFieldInitializer)
+                { RequireInitialized(call.Location); receiver = This(origin); }
+                if (receiver is null) { diagnostics.Error("WF2020", "An instance method requires an object receiver.", call.Location); return Error(origin); }
+            }
+            else if (explicitReceiver) { diagnostics.Error("WF2020", "A static method must be called through its class, not an object.", call.Location); return Error(origin); }
+        }
         var supplied = arguments.Select((argument, i) => ConvertImplicit(argument, selected.Function.Parameters[selected.Order[i]].Type)).ToImmutableArray().ToBuilder();
         for (var i = supplied.Count; i < selected.Order.Length; i++)
         {
@@ -429,7 +454,7 @@ public sealed class Binder
             supplied.Add(new IrConstant(parameter.Default!.Value, parameter.Type, new(parameter.Location, "optional-argument", origin)));
         }
         return new IrCall(selected.Function, supplied.ToImmutable(), origin,
-            selected.Order.Where((index, i) => index != i).Any() ? selected.Order : default);
+            selected.Order.Where((index, i) => index != i).Any() ? selected.Order : default, receiver);
     }
 
     private static bool TryArgumentOrder(FunctionSymbol function, ImmutableArray<ArgumentSyntax> arguments, out ImmutableArray<int> order, out string? error)

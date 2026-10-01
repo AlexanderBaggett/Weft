@@ -12,6 +12,20 @@ public static class IrValidator
         var diagnostics = new DiagnosticBag();
         var functions = new Dictionary<int, FunctionSymbol>();
         var names = new HashSet<string>(StringComparer.Ordinal);
+        var classes = new Dictionary<string, IrClass>(StringComparer.Ordinal);
+        var fields = new Dictionary<int, FieldSymbol>();
+        foreach (var type in module.Classes.IsDefault ? [] : module.Classes)
+        {
+            var origin = new SourceOrigin(type.Symbol.Location);
+            if (type.Symbol.IsStatic || !classes.TryAdd(type.Symbol.Name, type)) Fail("Invalid or duplicate IR class.", origin);
+            var fieldNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var field in type.Fields)
+                if (field.Owner != new WeftType(TypeKind.Nominal, type.Symbol.Name) || !fields.TryAdd(field.Id, field) || !fieldNames.Add(field.Name))
+                    Fail("Invalid or duplicate IR field identity, name, or owner.", new(field.Location));
+        }
+        foreach (var field in fields.Values) CheckType(field.Type, false, new(field.Location));
+        FunctionSymbol? currentFunction = null;
+        HashSet<int> functionIdentities = [];
         foreach (var function in module.Functions)
         {
             var signature = function.Symbol.Name + "(" + string.Join(",", function.Symbol.Parameters.Select(p => p.Type.Name)) + ")";
@@ -20,8 +34,18 @@ public static class IrValidator
         }
         foreach (var function in module.Functions)
         {
+            currentFunction = function.Symbol;
             var locals = new Dictionary<int, VariableSymbol>();
-            var identities = new HashSet<int>();
+            var identities = new HashSet<int>(); functionIdentities = identities;
+            if (function.Symbol.Receiver is { } receiver)
+            {
+                CheckType(receiver.Type, false, function.Origin);
+                if (receiver.Type.Kind != TypeKind.Nominal || receiver.Type.Name != function.Symbol.ContainingType ||
+                    function.Symbol.IsConstructor && function.Symbol.ReturnType != receiver.Type)
+                    Fail("Invalid IR receiver or constructor result type.", function.Origin);
+                if (!function.Symbol.IsConstructor) { locals.Add(receiver.Id, receiver); identities.Add(receiver.Id); }
+            }
+            else if (function.Symbol.IsConstructor) Fail("IR constructor requires a receiver local.", function.Origin);
             foreach (var parameter in function.Symbol.Parameters)
             {
                 CheckType(parameter.Type, false, function.Origin);
@@ -37,7 +61,7 @@ public static class IrValidator
         void Fail(string message, SourceOrigin origin) => diagnostics.Error("WF3001", message, origin.Location);
         void CheckType(WeftType type, bool allowVoid, SourceOrigin origin)
         {
-            if (type != WeftType.Bool && type != WeftType.Int32 && type != WeftType.Int64 && type != WeftType.String && !(allowVoid && type == WeftType.Void))
+            if (type != WeftType.Bool && type != WeftType.Int32 && type != WeftType.Int64 && type != WeftType.String && !(type.Kind == TypeKind.Nominal && type.Arguments.IsDefaultOrEmpty && classes.ContainsKey(type.Name)) && !(allowVoid && type == WeftType.Void))
                 Fail($"Type '{type.Name}' is not in the executable IR version's portable type set.", origin);
         }
         void Statement(IrStatement statement, Dictionary<int, VariableSymbol> locals, HashSet<int> identities, WeftType returned, int loopDepth = 0)
@@ -70,7 +94,7 @@ public static class IrValidator
                     break;
                 case IrExpressionStatement expression:
                     Expression(expression.Expression, locals);
-                    if (expression.Expression is not (IrAssign or IrCall or IrIntrinsic or IrUpdate)) Fail("IR expression statement must be a call, assignment, or increment/decrement operation.", expression.Origin);
+                    if (expression.Expression is not (IrAssign or IrCall or IrIntrinsic or IrUpdate or IrFieldWrite or IrFieldUpdate or IrSequence)) Fail("IR expression statement must be a call, assignment, or increment/decrement operation.", expression.Origin);
                     break;
                 case IrIf conditional:
                     Expression(conditional.Condition, locals);
@@ -120,6 +144,27 @@ public static class IrValidator
                     if (conditional.Condition.Type != WeftType.Bool || conditional.WhenTrue.Type != conditional.Type || conditional.WhenFalse.Type != conditional.Type)
                         Fail("IR conditional condition or branch type mismatch.", conditional.Origin);
                     break;
+                case IrAllocate allocated:
+                    if (allocated.Type.Kind != TypeKind.Nominal || currentFunction?.IsConstructor != true || currentFunction.Receiver?.Type != allocated.Type)
+                        Fail("Raw IR allocation is restricted to the matching constructor.", allocated.Origin);
+                    break;
+                case IrFieldRead read:
+                    Field(read.Field, read.Receiver, read.Origin, locals); break;
+                case IrFieldWrite write:
+                    Field(write.Field, write.Receiver, write.Origin, locals); Expression(write.Value, locals);
+                    if (write.Value.Type != write.Type) Fail("IR field assignment type mismatch.", write.Origin);
+                    Writable(write.Field, write.Receiver, write.Origin); break;
+                case IrFieldUpdate update:
+                    Field(update.Field, update.Receiver, update.Origin, locals); Writable(update.Field, update.Receiver, update.Origin);
+                    if (!Integer(update.Type) || update.Operator is not ("++" or "--")) Fail("Invalid IR field update.", update.Origin);
+                    break;
+                case IrSequence sequence:
+                    if (sequence.Bindings.IsDefaultOrEmpty)
+                    { Fail("IR sequence must contain at least one binding.", sequence.Origin); break; }
+                    var sequenceLocals = new Dictionary<int, VariableSymbol>(locals);
+                    foreach (var binding in sequence.Bindings) Statement(binding, sequenceLocals, functionIdentities, WeftType.Void);
+                    Expression(sequence.Value, sequenceLocals);
+                    break;
                 case IrConvert conversion:
                     Expression(conversion.Operand, locals);
                     if (conversion.Operand.Type != WeftType.Int32 || conversion.Type != WeftType.Int64)
@@ -149,7 +194,7 @@ public static class IrValidator
                         "+" => (Integer(type) || type == WeftType.String) && binary.Type == type,
                         "-" or "*" or "/" or "%" => Integer(type) && binary.Type == type,
                         "<" or ">" or "<=" or ">=" => Integer(type) && binary.Type == WeftType.Bool,
-                        "==" or "!=" => (Integer(type) || type == WeftType.Bool || type == WeftType.String) && binary.Type == WeftType.Bool,
+                        "==" or "!=" => (Integer(type) || type == WeftType.Bool || type == WeftType.String || type.Kind == TypeKind.Nominal) && binary.Type == WeftType.Bool,
                         "&&" or "||" => type == WeftType.Bool && binary.Type == WeftType.Bool,
                         _ => false
                     };
@@ -157,6 +202,10 @@ public static class IrValidator
                     break;
                 case IrCall call:
                     if (!functions.TryGetValue(call.Function.Id, out var target) || target != call.Function) Fail("IR call targets a missing or mismatched function.", call.Origin);
+                    var needsReceiver = call.Function.Receiver is not null && !call.Function.IsConstructor;
+                    if (call.Receiver is not null) Expression(call.Receiver, locals);
+                    if (needsReceiver != (call.Receiver is not null) || needsReceiver && call.Receiver?.Type != call.Function.Receiver!.Type)
+                        Fail("IR call receiver is missing, unexpected, or has the wrong type.", call.Origin);
                     var parameters = call.Function.Parameters.Select(p => p.Type).ToImmutableArray();
                     if (!call.ParameterOrder.IsDefaultOrEmpty)
                     {
@@ -172,6 +221,17 @@ public static class IrValidator
                     Arguments(intrinsic.Signature.Parameters, intrinsic.Arguments, intrinsic.Origin, locals); break;
                 default: Fail("Unrecognized IR expression; extend both backends and the validator together.", expression.Origin); break;
             }
+        }
+        void Field(FieldSymbol field, IrExpression receiver, SourceOrigin origin, Dictionary<int, VariableSymbol> locals)
+        {
+            Expression(receiver, locals);
+            if (!fields.TryGetValue(field.Id, out var registered) || registered != field || receiver.Type != field.Owner)
+                Fail("IR field reference has an unknown field or mismatched owner.", origin);
+        }
+        void Writable(FieldSymbol field, IrExpression receiver, SourceOrigin origin)
+        {
+            if (field.ReadOnly && !(currentFunction?.IsConstructor == true && receiver is IrRead read && read.Symbol == currentFunction.Receiver))
+                Fail("IR readonly field write is outside its constructor.", origin);
         }
         void Arguments(ImmutableArray<WeftType> expected, ImmutableArray<IrExpression> actual, SourceOrigin origin, Dictionary<int, VariableSymbol> locals)
         {

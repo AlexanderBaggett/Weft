@@ -84,6 +84,7 @@ switches qualify.
 | [compiler](docs/compiler.md) | Shared compiler and IR, .NET/JVM backends, runtime contracts |
 | [numeric types](docs/contracts/numeric-types.md) | Common C#/Java types, C# decimal behavior, and portable runtime support |
 | [functions and methods](docs/contracts/functions.md) | Executable overloads, named/optional arguments, static helpers, visibility, and current limits |
+| [classes and construction](docs/contracts/objects.md) | Executable fields, constructors, instance methods, aliasing, and initialization checks |
 | [ordinary control flow](docs/contracts/control-flow.md) | Loop execution, break/continue, conditional expressions, and shared return checks |
 | [sharing middleware](docs/contracts/project-pipelines.md) | Explicit node connections and pipeline adoption across projects and DLL/jar boundaries |
 | [roadmap](docs/roadmap.md) | AI engineering workflow, evolving milestones, and full-release criteria |
@@ -106,6 +107,7 @@ switches qualify.
 | [grammar](docs/grammar.md) | EBNF sketch |
 | [open-questions](docs/open-questions.md) | Decisions not yet made |
 
-Runnable foundation: [examples/foundation](examples/foundation/main.weft).
+Runnable examples: [foundation](examples/foundation/main.weft),
+[functions](examples/functions/Program.weft), and [classes](examples/classes/Program.weft).
 Full-language design sketches: [examples/orders.weft](examples/orders.weft),
 [examples/input.rules](examples/input.rules), [examples/switches.weft](examples/switches.weft).

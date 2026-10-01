@@ -1,0 +1,7 @@
+{
+  "id": "class-reference-initialization",
+  "sources": {
+    "main.weft": "class Label {\n    public readonly string Name;\n    public Label(bool first) { if (first) Name = \"first\"; else Name = \"second\"; }\n}\nclass Holder {\n    public Label Item = new Label(true);\n    public string Name;\n    public Holder(bool stop) {\n        if (stop) { Name = \"early\"; return; }\n        do { Name = \"normal\"; } while (false);\n    }\n}\nvoid Main() {\n    var h = new Holder(false); Print(h.Item.Name); Print(h.Name);\n    Print(new Holder(true).Name); Print(new Label(false).Name);\n}"
+  },
+  "stdout": "first\nnormal\nearly\nsecond\n"
+}

@@ -1,0 +1,35 @@
+namespace Demo;
+
+public class Order
+{
+    public readonly string Customer;
+    private long subtotal;
+
+    public Order(string customer, long subtotal = 0)
+    {
+        Customer = customer;
+        this.subtotal = subtotal;
+    }
+
+    public long Add(int units, long unitPrice)
+    {
+        subtotal += units * unitPrice;
+        return subtotal;
+    }
+
+    public long Total() => subtotal;
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        var order = new Order("Ada");
+        var alias = order;
+        Print(alias.Add(unitPrice: 25L, units: 2));
+        Print(order.Total());
+        Print(order == alias);
+        Print(order == new Order("Ada", 50));
+        Print(order.Customer);
+    }
+}

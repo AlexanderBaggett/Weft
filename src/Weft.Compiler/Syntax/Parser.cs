@@ -12,7 +12,7 @@ public sealed class Parser
     private int position;
     private SyntaxToken Current => tokens[Math.Min(position, tokens.Length - 1)];
     private SyntaxToken Peek(int offset) => tokens[Math.Min(position + offset, tokens.Length - 1)];
-    private static readonly HashSet<string> Modifiers = ["public", "private", "internal", "static", "async", "pure", "idempotent", "external"];
+    private static readonly HashSet<string> Modifiers = ["public", "private", "internal", "static", "async", "pure", "idempotent", "external", "readonly"];
     private static readonly Dictionary<string, ConstructKind> Constructs = Enum.GetValues<ConstructKind>()
         .Where(k => k != ConstructKind.SwitchGroup).ToDictionary(k => k.ToString().ToLowerInvariant());
 
@@ -42,19 +42,19 @@ public sealed class Parser
     }
     private static string Display(SyntaxToken token) => token.Kind == TokenKind.End ? "end of file" : token.Text;
 
-    private ImmutableArray<DeclarationSyntax> ParseDeclarations(bool nested)
+    private ImmutableArray<DeclarationSyntax> ParseDeclarations(bool nested, string? owner = null)
     {
         var declarations = ImmutableArray.CreateBuilder<DeclarationSyntax>();
         while (Current.Kind != TokenKind.End && (!nested || Current.Text != "}"))
         {
             var before = position;
-            declarations.Add(ParseDeclaration());
+            declarations.Add(ParseDeclaration(owner));
             if (position == before) Next();
         }
         return declarations.ToImmutable();
     }
 
-    private DeclarationSyntax ParseDeclaration()
+    private DeclarationSyntax ParseDeclaration(string? owner)
     {
         var location = Current.Location;
         var modifiers = ImmutableArray.CreateBuilder<string>();
@@ -68,11 +68,11 @@ public sealed class Parser
             Expect("}");
             return new NamespaceSyntax(name, false, members, location);
         }
-        if (Current.Text == "class" && modifiers.Contains("static") && Peek(2).Text == "{")
+        if (Current.Text == "class" && Peek(2).Text == "{")
         {
             Next(); var name = Identifier().Text; Expect("{");
-            var members = ParseDeclarations(true); Expect("}");
-            return new StaticClassSyntax(name, members, modifiers.ToImmutable(), location);
+            var members = ParseDeclarations(true, name); Expect("}");
+            return new ClassSyntax(name, members, modifiers.ToImmutable(), location);
         }
         if (Constructs.TryGetValue(Current.Text, out var kind) || Current.Text == "switch")
         {
@@ -95,8 +95,15 @@ public sealed class Parser
             if (body is null) Expect(";"); else Take(";");
             return new ConstructSyntax(kind, name, modifiers.ToImmutable(), header.ToImmutable(), body, location);
         }
-        var returnType = ParseType();
+        var constructor = owner is not null && Current.Text == owner && Peek(1).Text == "(";
+        var returnType = constructor ? new TypeSyntax("void", [], 0, false, location) : ParseType();
         var functionName = Identifier().Text;
+        if (owner is not null && !constructor && Current.Text != "(")
+        {
+            if (Current.Text == "{") return new PropertySyntax(functionName, returnType, ReadGroup(), modifiers.ToImmutable(), location);
+            var initializer = Take("=") ? ParseExpression() : null; Expect(";");
+            return new FieldSyntax(functionName, returnType, initializer, modifiers.ToImmutable(), location);
+        }
         Expect("(");
         var parameters = ImmutableArray.CreateBuilder<ParameterSyntax>();
         while (Current.Kind != TokenKind.End && Current.Text is not (")" or "{" or ";" or "}"))
@@ -120,7 +127,7 @@ public sealed class Parser
         }
         else if (Current.Text == "{") functionBody = ParseBlock();
         else Expect(";");
-        return new FunctionSyntax(functionName, returnType, parameters.ToImmutable(), functionBody, modifiers.ToImmutable(), location);
+        return new FunctionSyntax(functionName, returnType, parameters.ToImmutable(), functionBody, modifiers.ToImmutable(), location, constructor);
     }
 
     private string QualifiedName()
@@ -224,7 +231,7 @@ public sealed class Parser
             else { Expect("{"); body = new("{}", [], Current.Location); }
             return new EffectScopeSyntax(kind, header.ToImmutable(), body, location);
         }
-        if (Current.Text == "var" || Current.Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.Identifier)
+        if (IsVariableDeclaration())
         {
             TypeSyntax? type = Take("var") ? null : ParseType();
             var name = Identifier().Text;
@@ -235,13 +242,38 @@ public sealed class Parser
         return new ExpressionStatementSyntax(value, location);
     }
 
+    private bool IsVariableDeclaration()
+    {
+        if (Current.Text == "var") return true;
+        if (Current.Text == "new") return false;
+        if (Current.Kind != TokenKind.Identifier) return false;
+        var offset = 1;
+        while (Peek(offset).Text == "." && Peek(offset + 1).Kind == TokenKind.Identifier) offset += 2;
+        return Peek(offset).Kind == TokenKind.Identifier;
+    }
+
+    private ImmutableArray<ArgumentSyntax> ParseArguments()
+    {
+        Expect("(");
+        var arguments = ImmutableArray.CreateBuilder<ArgumentSyntax>();
+        if (Current.Text != ")") do
+        {
+            var location = Current.Location;
+            string? name = null;
+            if (Current.Kind == TokenKind.Identifier && Peek(1).Text == ":") { name = Next().Text; Next(); }
+            arguments.Add(new(ParseExpression(), name, location));
+        } while (Take(","));
+        Expect(")");
+        return arguments.ToImmutable();
+    }
+
     private ForSyntax ParseFor(SourceLocation location)
     {
         Expect("(");
         var initializers = ImmutableArray.CreateBuilder<StatementSyntax>();
         if (Current.Text != ";")
         {
-            if (Current.Text == "var" || Current.Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.Identifier)
+            if (IsVariableDeclaration())
             {
                 TypeSyntax? type = Take("var") ? null : ParseType();
                 do
@@ -281,6 +313,10 @@ public sealed class Parser
             var op = Next();
             left = new UnarySyntax(op.Text, ParseExpression(9), op.Location);
         }
+        else if (Take("new"))
+        {
+            var type = ParseType(); left = new NewSyntax(type, ParseArguments(), type.Location);
+        }
         else if (Take("(")) { left = ParseExpression(); Expect(")"); }
         else if (Current.Kind is TokenKind.Number or TokenKind.String or TokenKind.InterpolatedString || Current.Text is "true" or "false" or "null") left = new LiteralSyntax(Next());
         else
@@ -291,19 +327,9 @@ public sealed class Parser
         while (true)
         {
             if (Take(".")) { var member = Identifier(); left = new MemberSyntax(left, member.Text, member.Location); continue; }
-            if (Take("("))
+            if (Current.Text == "(")
             {
-                var arguments = ImmutableArray.CreateBuilder<ArgumentSyntax>();
-                if (Current.Text != ")") do
-                {
-                    var argumentLocation = Current.Location;
-                    string? name = null;
-                    if (Current.Kind == TokenKind.Identifier && Peek(1).Text == ":") { name = Next().Text; Next(); }
-                    arguments.Add(new(ParseExpression(), name, argumentLocation));
-                } while (Take(","));
-                Expect(")");
-                left = new CallSyntax(left, arguments.ToImmutable(), left.Location);
-                continue;
+                left = new CallSyntax(left, ParseArguments(), left.Location); continue;
             }
             if (Current.Text is "++" or "--")
             {

@@ -28,16 +28,28 @@ public sealed class DotNetEmitter
         writer.WriteLine($"Weft.Runtime.RuntimeContract.RequireAbi({Quote(module.RuntimeAbi)});");
         writer.WriteLine(entry.ReturnType == WeftType.Void ? $"f_{entry.Id}(); return 0;" : $"return f_{entry.Id}();");
         writer.WriteLine("}");
+        foreach (var type in module.Classes.IsDefault ? [] : module.Classes)
+        {
+            writer.WriteLine($"private sealed class {ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name))} {{", new(type.Symbol.Location));
+            foreach (var field in type.Fields) writer.WriteLine($"public {Type(field.Type)} m_{field.Id};", new(field.Location));
+            writer.WriteLine("}");
+        }
+        foreach (var (ignored, result) in ObjectEmission.Sequences(module))
+            writer.WriteLine($"private static {Type(result)} {ObjectEmission.SequenceName(ignored, result)}({Type(ignored)} ignored, {Type(result)} result) {{ return result; }}");
         foreach (var function in module.Functions)
         {
             writer.WriteLine($"#line {function.Origin.Location.Line} {Quote(function.Origin.Location.File)}");
-            writer.WriteLine($"private static {Type(function.Symbol.ReturnType)} f_{function.Symbol.Id}({string.Join(", ", function.Symbol.Parameters.Select(p => $"{Type(p.Type)} v_{p.Id}"))})", function.Origin);
-            Statement(function.Body);
+            writer.WriteLine($"private static {Type(function.Symbol.ReturnType)} f_{function.Symbol.Id}({string.Join(", ", ObjectEmission.Parameters(function.Symbol).Select(p => $"{Type(p.Type)} v_{p.Id}"))})", function.Origin);
+            writer.WriteLine("{");
+            foreach (var temporary in ObjectEmission.Temporaries(function)) writer.WriteLine($"{Type(temporary.Type)} v_{temporary.Id};");
+            Statement(function.Body); writer.WriteLine("}");
         }
         foreach (var call in CallAdapters.Collect(module))
         {
             var parameters = string.Join(", ", call.Arguments.Select((argument, i) => $"{Type(argument.Type)} a_{i}"));
+            if (call.Receiver is not null) parameters = $"{Type(call.Receiver.Type)} receiver" + (parameters.Length > 0 ? ", " + parameters : "");
             var arguments = string.Join(", ", Enumerable.Range(0, call.Arguments.Length).Select(i => $"a_{call.ParameterOrder.IndexOf(i)}"));
+            if (call.Receiver is not null) arguments = "receiver" + (arguments.Length > 0 ? ", " + arguments : "");
             writer.WriteLine($"private static {Type(call.Type)} {CallAdapters.Name(call)}({parameters}) => f_{call.Function.Id}({arguments});",
                 new(call.Origin.Location, "named-argument-adapter", call.Origin));
         }
@@ -88,6 +100,7 @@ public sealed class DotNetEmitter
     private static string Type(WeftType type) => type.Kind switch
     {
         TypeKind.Void => "void", TypeKind.Bool => "bool", TypeKind.Int32 => "int", TypeKind.Int64 => "long", TypeKind.String => "string",
+        TypeKind.Nominal => ObjectEmission.TypeName(type),
         _ => throw new InvalidOperationException($"Unsupported IR type '{type.Name}'.")
     };
     internal static string Quote(string value) => SymbolDisplay.FormatLiteral(value, quote: true);
@@ -96,9 +109,14 @@ public sealed class DotNetEmitter
     private static string StatementExpression(IrExpression expression) => expression switch
     {
         IrAssign assign => $"v_{assign.Symbol.Id} = {Expression(assign.Value)}",
+        IrFieldWrite write => $"({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)}",
+        IrFieldUpdate update => FieldUpdate(update),
         IrUpdate update => Update(update),
         _ => Expression(expression)
     };
+    private static string FieldUpdate(IrFieldUpdate update) => update.Postfix
+        ? $"({Expression(update.Receiver)}).m_{update.Field.Id}{update.Operator}"
+        : $"{update.Operator}({Expression(update.Receiver)}).m_{update.Field.Id}";
     private static string Expression(IrExpression expression) => expression switch
     {
         IrConstant constant => constant.Value switch
@@ -109,13 +127,18 @@ public sealed class DotNetEmitter
         },
         IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
         IrUpdate update => $"unchecked({Update(update)})",
+        IrAllocate allocated => $"new {Type(allocated.Type)}()",
+        IrFieldRead read => $"({Expression(read.Receiver)}).m_{read.Field.Id}",
+        IrFieldWrite write => $"(({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)})",
+        IrFieldUpdate update => $"unchecked({FieldUpdate(update)})",
+        IrSequence sequence => ObjectEmission.Sequence(sequence, Expression),
         IrRead read => $"v_{read.Symbol.Id}",
         IrConvert convert => $"((long)({Expression(convert.Operand)}))",
         IrAssign assign => $"(v_{assign.Symbol.Id} = {Expression(assign.Value)})",
         IrUnary unary => $"unchecked({unary.Operator}({Expression(unary.Operand)}))",
         IrBinary binary when binary.Operator is "/" or "%" => $"Weft.Runtime.RuntimeContract.{(binary.Operator == "/" ? "Divide" : "Remainder")}({Expression(binary.Left)}, {Expression(binary.Right)})",
         IrBinary binary => $"unchecked({Expression(binary.Left)} {binary.Operator} {Expression(binary.Right)})",
-        IrCall call => $"{CallAdapters.Name(call)}({string.Join(", ", call.Arguments.Select(Expression))})",
+        IrCall call => $"{CallAdapters.Name(call)}({string.Join(", ", ObjectEmission.Arguments(call).Select(Expression))})",
         IrIntrinsic intrinsic => $"Weft.Runtime.RuntimeContract.{(intrinsic.Signature.Name == Intrinsics.Print.Name ? "WriteLine" : "Text")}({string.Join(", ", intrinsic.Arguments.Select(Expression))})",
         _ => throw new InvalidOperationException($"Unsupported IR expression {expression.GetType().Name}.")
     };

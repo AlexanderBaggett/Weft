@@ -1,0 +1,7 @@
+{
+  "id": "class-constructor-order",
+  "sources": {
+    "main.weft": "int Mark(string name, int value) { Print(name); return value; }\nclass Pair {\n    public int A = Mark(\"field A\", 1);\n    public long B = Mark(\"field B\", 2);\n    public Pair(int first, long second = 9) { Print(\"ctor\"); A = first; B = second; }\n    public Pair(string name) { Print(name); }\n    public long Sum(int extra = 0) => A + B + extra;\n}\nPair Get(Pair value) { Print(\"receiver\"); return value; }\nvoid Main() {\n    var pair = new Pair(second: Mark(\"second\", 20), first: Mark(\"first\", 10));\n    Print(Get(pair).Sum(extra: Mark(\"argument\", 3)));\n    Print(new Pair(4).Sum());\n    Print(new Pair(\"overload\").Sum());\n}"
+  },
+  "stdout": "second\nfirst\nfield A\nfield B\nctor\nreceiver\nargument\n33\nfield A\nfield B\nctor\n13\nfield A\nfield B\noverload\n3\n"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "class-construction-and-aliasing",
+  "sources": {
+    "main.weft": "class Counter {\n    public int Value;\n    public bool Enabled;\n    public int Add(int amount = 1) { Value += amount; return Value; }\n    public Counter Self() => this;\n}\nvoid Change(Counter value) { value.Value += 10; }\nvoid Main() {\n    var a = new Counter(); var b = a;\n    Print(a.Value); Print(a.Enabled);\n    b.Value = 3; Print(a.Add()); Change(b); Print(a.Value);\n    Print(a == b); Print(a == a.Self()); Print(a != new Counter());\n}"
+  },
+  "stdout": "0\nfalse\n4\n14\ntrue\ntrue\ntrue\n"
+}
