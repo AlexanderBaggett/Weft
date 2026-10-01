@@ -2,7 +2,8 @@
 
 Weft's first release still includes the full language on .NET and JVM. The current
 compiler includes the Phase 1 foundation and Phase 2 ordinary-language work: functions,
-classes/models/records, positional and chained constructors, value equality/hash,
+classes/models/records, static fields/properties/type initialization,
+positional and chained constructors, value equality/hash,
 shallow copies and custom copy constructors, object initializers, required members, fields, instance
 properties/get/set/init accessors, instance/static methods,
 overloads, named/optional
@@ -130,6 +131,18 @@ dotnet run --project src/Weft.Cli -- run --project examples/data --backend jvm
 Each run prints `Ada:50`, `Ada:75`, `true`, `true`, `2`, `false`, and `Grace:2`.
 See [models and records](contracts/data-types.md). WF2030 covers invalid `with` targets
 or initializer forms; WF2031 covers invalid positional/copy constructor contracts.
+
+The [static example](../examples/statics/Program.weft) initializes a shared catalog once
+and allocates identifiers through a static property:
+
+```sh
+dotnet run --project src/Weft.Cli -- run --project examples/statics --backend dotnet
+dotnet run --project src/Weft.Cli -- run --project examples/statics --backend jvm
+```
+
+Each run prints `start`, `catalog ready`, `main`, `1`, `100`, `101`, and `true`.
+See [static members](contracts/static-members.md). WF2032 covers invalid static
+declarations; WF2033 covers incomplete static non-null initialization.
 
 ## Initial manifest
 

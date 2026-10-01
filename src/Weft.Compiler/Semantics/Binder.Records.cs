@@ -24,11 +24,12 @@ public sealed partial class Binder
             {
                 var memberType = explicitMember switch { FieldSyntax field => field.Type, PropertySyntax declaredProperty => declaredProperty.Type, _ => null };
                 if (memberType is null || ResolveType(memberType, false) != ResolveType(parameter.Type, false) ||
-                    explicitMember is PropertySyntax property && !property.Accessors.Any(a => a.Kind == "get"))
+                    explicitMember is FieldSyntax { Modifiers: var fieldModifiers } && fieldModifiers.Contains("static") ||
+                    explicitMember is PropertySyntax property && (property.Modifiers.Contains("static") || !property.Accessors.Any(a => a.Kind == "get")))
                     diagnostics.Error("WF2031", $"Positional member '{parameter.Name}' must be a readable instance field/property of the parameter type.", explicitMember.Location);
             }
         }
-        foreach (var constructor in type.Members.OfType<FunctionSyntax>().Where(f => f.IsConstructor))
+        foreach (var constructor in type.Members.OfType<FunctionSyntax>().Where(f => f.IsConstructor && !f.Modifiers.Contains("static")))
             if (constructor.Initializer?.Kind != "this" && !IsRecordCopyConstructor(constructor, Nominal(Qualify(currentNamespace, type.Name))))
                 diagnostics.Error("WF2031", "A non-copy constructor in a positional record must have a this(...) initializer.", constructor.Location);
         members.AddRange(type.Members);
@@ -38,7 +39,7 @@ public sealed partial class Binder
     }
 
     private bool IsRecordCopyConstructor(FunctionSyntax function, WeftType owner) => function.IsConstructor &&
-        !function.IsPrimaryConstructor && function.Parameters.Length == 1 && ResolveType(function.Parameters[0].Type, false) == owner;
+        !function.Modifiers.Contains("static") && !function.IsPrimaryConstructor && function.Parameters.Length == 1 && ResolveType(function.Parameters[0].Type, false) == owner;
 
     private void DeclareRecordOperations()
     {

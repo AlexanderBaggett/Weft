@@ -7,6 +7,10 @@ public final class RuntimeContract {
     public static void requireAbi(String expected) {
         if (!ABI.equals(expected)) throw new IllegalStateException("Weft runtime ABI " + ABI + " cannot execute ABI " + expected);
     }
+    public static <T> T readStatic(T value, String field) {
+        if (value == null) throw new IllegalStateException("Static field '" + field + "' was read before initialization.");
+        return value;
+    }
     public static void writeLine(String value) { System.out.println(value); }
     public static String text(int value) { return Integer.toString(value); }
     public static String text(long value) { return Long.toString(value); }

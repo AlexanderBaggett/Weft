@@ -82,6 +82,6 @@ bodies, and malformed IR. Five executable conformance cases independently specif
 field/body/argument order, parameter mutation, optional/named calls, object identity,
 readonly writes, required/non-null state, and nested object-initializer arguments.
 
-[Records](data-types.md) now add positional and copy constructors. Inheritance/base-argument binding, static initialization, and broader
+[Records](data-types.md) now add positional and copy constructors. [Static initialization](static-members.md) is also executable. Inheritance/base-argument binding and broader
 object/type integration remain required work in P02-003/004/011 and later phases.
 This checkpoint does not complete the ordinary object model.

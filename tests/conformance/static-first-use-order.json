@@ -1,0 +1,7 @@
+{
+  "id": "static-first-use-order",
+  "sources": {
+    "main.weft": "int Trace(string text, int value) { Print(text); return value; }\nclass Field {\n public static int Value = Trace(\"field-init\", 1);\n}\nclass Property {\n static int stored = Trace(\"property-init\", 2);\n public static int Value { get { Print(\"get\"); return stored; } set { Print(\"set:\" + value); stored = value + 1; value = 99; } }\n}\nclass Method {\n static Method() { Print(\"method-init\"); }\n public static int Add(int a, int b) => a + b;\n}\nvoid Main() {\n Field.Value = Trace(\"field-rhs\", 5); Print(Field.Value);\n Print(Property.Value = Trace(\"property-rhs\", 6)); Print(Property.Value);\n Print(Property.Value += Trace(\"compound-rhs\", 3)); Print(Property.Value++); Print(Property.Value);\n Print(Method.Add(b: Trace(\"b\", 2), a: Trace(\"a\", 1)));\n}\n"
+  },
+  "stdout": "field-rhs\nfield-init\n5\nproperty-rhs\nproperty-init\nset:6\n6\nget\n7\nget\ncompound-rhs\nset:10\n10\nget\nset:12\n11\nget\n13\nb\na\nmethod-init\n3\n"
+}

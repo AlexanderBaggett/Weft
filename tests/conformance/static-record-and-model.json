@@ -1,0 +1,7 @@
+{
+  "id": "static-record-and-model",
+  "sources": {
+    "main.weft": "record R(int X) {\n public static int Counter = 1;\n public static string Name { get; } = \"record\";\n static R() { Print(\"record-init\"); Counter++; }\n}\nmodel M { public static string Name = \"model\"; int N; }\nvoid Main() {\n var r = new R(1); var hash = r.GetHashCode(); R.Counter = 10;\n var copy = r with { X = 2 }; Print(r.X); Print(copy.X); Print(R.Counter);\n Print(hash == r.GetHashCode()); Print(r == new R(1)); Print(R.Name);\n var m = new M { N = 3 }; var n = m with { N = 4 };\n Print(M.Name); Print(m.N); Print(n.N);\n}\n"
+  },
+  "stdout": "record-init\n1\n2\n10\ntrue\ntrue\nrecord\nmodel\n3\n4\n"
+}

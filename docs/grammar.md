@@ -312,16 +312,17 @@ foundation-unit = { namespace-decl | foundation-function | foundation-class | fo
 foundation-class = { modifier } ( "class" | "model" ) ident foundation-type-body ;
 foundation-record = { visibility } "record" [ "class" ] ident [ "(" [ parameter { "," parameter } ] ")" ]
                     ( ";" | foundation-type-body [ ";" ] ) ;
-foundation-type-body = "{" { foundation-function | foundation-field | foundation-property | constructor } "}" ;
+foundation-type-body = "{" { foundation-function | foundation-field | foundation-property | constructor | static-constructor } "}" ;
+static-constructor = "static" ident "(" ")" ( foundation-block | "=>" expression ";" ) ;
 foundation-field = { modifier } type ident [ "=" expression ] ";" ;
-foundation-property = { visibility | "required" } type ident
+foundation-property = { visibility | "required" | "static" } type ident
                       ( "=>" expression ";" | "{" accessor { accessor } "}" [ "=" expression ";" ] ) ;
 accessor        = [ visibility ] ( "get" | "set" | "init" ) ( ";" | foundation-block | "=>" expression ";" ) ;
 constructor     = { visibility } ident "(" [ parameter { "," parameter } ] ")"
                   [ ":" ( "this" | "base" ) "(" [ argument { "," argument } ] ")" ]
                   ( foundation-block | "=>" expression ";" ) ;
 (* The constructor name must match its class. this(...) delegates; base() is root-only for now.
-   Static classes allow static methods only. *)
+   Static classes allow static fields/properties/methods and a static constructor. *)
 foundation-function = { modifier } type ident "(" [ parameter { "," parameter } ] ")"
                       ( foundation-block | "=>" expression ";" | ";" ) ;
 parameter       = type ident [ "=" constant-expression ] ;

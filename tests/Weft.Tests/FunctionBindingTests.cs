@@ -48,7 +48,7 @@ public sealed class FunctionBindingTests
     {
         var result = Compilation.Analyze("library", [new("api.weft", "namespace Pricing; public static class Prices { public static long Total(int count, long fee = 2 + 3) => count + fee; }")]);
         Assert.Empty(result.Diagnostics);
-        var method = Assert.Single(result.Functions);
+        var method = Assert.Single(result.Functions.Where(f => f.Visibility == Visibility.Public));
         Assert.Equal("Pricing.Prices", method.ContainingType);
         Assert.Equal(Visibility.Public, method.Visibility);
         Assert.Equal(new[] { "count", "fee" }, method.Parameters.Select(p => p.Name));

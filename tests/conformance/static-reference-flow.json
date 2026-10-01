@@ -1,0 +1,7 @@
+{
+  "id": "static-reference-flow",
+  "sources": {
+    "main.weft": "class C {\n public static string Name;\n public static string Label { get; }\n static C() {\n  Name = \"Ada\";\n  if (Name == \"Ada\") { Label = \"yes\"; return; }\n  Label = \"no\";\n }\n public static string Read() => Name + \":\" + Label;\n}\nvoid Main() { Print(C.Read()); C.Name = \"Grace\"; Print(C.Read()); }\n"
+  },
+  "stdout": "Ada:yes\nGrace:yes\n"
+}

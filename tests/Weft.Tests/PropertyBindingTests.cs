@@ -21,7 +21,7 @@ public sealed class PropertyBindingTests
     [InlineData("class C { public string P { get; } public C() { var alias = this; P = \"x\"; } }", "WF2022")]
     [InlineData("class C { public int P { get; set; } = this.P; }", "WF2020")]
     [InlineData("class C { public int P { get; set; } static int M() => P; }", "WF2020")]
-    [InlineData("class C { public int P { get; set; } } void Main() { Print(C.P); }", "WF2001")]
+    [InlineData("class C { public int P { get; set; } } void Main() { Print(C.P); }", "WF2020")]
     [InlineData("class Hidden {} public class C { public Hidden P { get; } = new Hidden(); }", "WF2019")]
     [InlineData("class C { int P { get; } int P; }", "WF2002")]
     [InlineData("class C { int P { get; } int P() => 1; }", "WF2002")]
@@ -43,7 +43,6 @@ public sealed class PropertyBindingTests
     [InlineData("class C { int P { get => value; } }", "WF2001")]
     [InlineData("class C { public int P { get; set; } } void Main() { new C().P = 1L; }", "WF2003")]
     [InlineData("class C { public string P { get; set; } = \"x\"; } void Main() { new C().P++; }", "WF2003")]
-    [InlineData("class C { public static int P { get; set; } }", "WF2009")]
     [InlineData("class C { public int P { get; } } void Main() { var c = new C(); c.P; }", "WF2008")]
     [InlineData("class C { public int P { get; } } void Main() { var c = new C(); for (; false; c.P) {} }", "WF2008")]
     public void Invalid_properties_are_rejected_before_emission(string source, string code)

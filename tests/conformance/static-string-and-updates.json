@@ -1,0 +1,7 @@
+{
+  "id": "static-string-and-updates",
+  "sources": {
+    "main.weft": "class State {\n public static string Text = \"A\";\n public static int N = 1;\n public static long L = 9223372036854775807L;\n public static int Property { get; set; } = 3;\n static State() { Text += \"B\"; }\n}\nint Right() { State.N = 20; return 4; }\nvoid Main() {\n Print(State.Text += 2); Print(State.N += Right()); Print(State.N);\n Print(State.L++); Print(State.L); Print(--State.Property);\n var n = 2; Print(State.Property += ++n); Print(n);\n}\n"
+  },
+  "stdout": "AB2\n5\n5\n9223372036854775807\n-9223372036854775808\n2\n5\n3\n"
+}

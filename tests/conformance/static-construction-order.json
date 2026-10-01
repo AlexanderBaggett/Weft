@@ -1,0 +1,7 @@
+{
+  "id": "static-construction-order",
+  "sources": {
+    "main.weft": "int Trace(string text, int value) { Print(text); return value; }\nclass C {\n public static int A = Trace(\"static-field\", 1);\n public static int B { get; set; } = Trace(\"static-property\", 2);\n public int X = Trace(\"instance-field\", 3);\n static C() { Print(\"static-body\"); }\n public C(int x) { Print(\"instance-body:\" + x); }\n public int Read() { Print(\"method\"); return A + B + X; }\n}\nclass Unused { static Unused() { Print(\"unexpected\"); } }\nvoid Main() {\n Print(\"start\"); var c = new C(Trace(\"argument\", 7)); Print(c.Read());\n var other = new C(8); Print(other.Read());\n}\n"
+  },
+  "stdout": "start\nargument\nstatic-field\nstatic-property\nstatic-body\ninstance-field\ninstance-body:7\nmethod\n6\ninstance-field\ninstance-body:8\nmethod\n6\n"
+}

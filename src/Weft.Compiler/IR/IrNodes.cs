@@ -5,7 +5,7 @@ using Weft.Compiler.Text;
 namespace Weft.Compiler.IR;
 
 public sealed record IrModule(string Name, ImmutableArray<IrFunction> Functions, ImmutableArray<IntrinsicSignature> RequiredIntrinsics, string RuntimeAbi, ImmutableArray<IrClass> Classes = default);
-public sealed record IrClass(TypeSymbol Symbol, ImmutableArray<FieldSymbol> Fields, FunctionSymbol? CopyConstructor = null);
+public sealed record IrClass(TypeSymbol Symbol, ImmutableArray<FieldSymbol> Fields, FunctionSymbol? CopyConstructor = null, FunctionSymbol? TypeInitializer = null);
 public sealed record IrFunction(FunctionSymbol Symbol, IrBlock Body, SourceOrigin Origin);
 public abstract record IrNode(SourceOrigin Origin);
 public abstract record IrStatement(SourceOrigin Origin) : IrNode(Origin);
@@ -32,14 +32,14 @@ public sealed record IrBinary(IrExpression Left, string Operator, IrExpression R
 public sealed record IrCall(FunctionSymbol Function, ImmutableArray<IrExpression> Arguments, SourceOrigin Origin,
     ImmutableArray<int> ParameterOrder = default, IrExpression? Receiver = null) : IrExpression(Function.ReturnType, Origin);
 // Invoke a void setter exactly once and return the supplied value, not its stored result.
-public sealed record IrSetterCall(FunctionSymbol Setter, IrExpression Receiver, IrExpression Value, SourceOrigin Origin)
+public sealed record IrSetterCall(FunctionSymbol Setter, IrExpression? Receiver, IrExpression Value, SourceOrigin Origin)
     : IrExpression(Value.Type, Origin);
 public sealed record IrCopy(IrExpression Receiver, SourceOrigin Origin) : IrExpression(Receiver.Type, Origin);
 public sealed record IrObjectHash(IrExpression Receiver, SourceOrigin Origin) : IrExpression(WeftType.Int32, Origin);
 public sealed record IrAllocate(WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
-public sealed record IrFieldRead(FieldSymbol Field, IrExpression Receiver, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
-public sealed record IrFieldWrite(FieldSymbol Field, IrExpression Receiver, IrExpression Value, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
-public sealed record IrFieldUpdate(FieldSymbol Field, IrExpression Receiver, string Operator, bool Postfix, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
+public sealed record IrFieldRead(FieldSymbol Field, IrExpression? Receiver, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
+public sealed record IrFieldWrite(FieldSymbol Field, IrExpression? Receiver, IrExpression Value, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
+public sealed record IrFieldUpdate(FieldSymbol Field, IrExpression? Receiver, string Operator, bool Postfix, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
 // Bindings execute left to right, then Value. Their locals exist only inside this expression.
 // An Initializing identity must be the first binding's freshly constructed object.
 public sealed record IrSequence(ImmutableArray<IrVariable> Bindings, IrExpression Value, SourceOrigin Origin, VariableSymbol? Initializing = null) : IrExpression(Value.Type, Origin);

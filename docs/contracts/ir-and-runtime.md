@@ -38,6 +38,11 @@ local value is evaluated before the right-hand side. `IrUpdate` retains prefix/p
 result behavior and validates its target's scope and integer type.
 
 `IrClass` and `FieldSymbol` describe reference objects and stable field identities.
+Static owners also appear in `IrClass`; their types are not valid object values.
+[Static fields/properties](static-members.md) use null IR receivers and explicit
+static metadata. Registered type initializers drive native once-only initialization;
+ordinary method/constructor entry activates its owner first. Runtime guards prevent
+cyclic static reference reads from exposing null under a non-null type.
 Constructors are factory functions; `IrAllocate` is restricted to the corresponding
 constructor. `IrFieldRead`/`IrFieldWrite`/`IrFieldUpdate` carry explicit receivers.
 `IrSequence` contains one or more scoped initialized temporaries followed by a value,

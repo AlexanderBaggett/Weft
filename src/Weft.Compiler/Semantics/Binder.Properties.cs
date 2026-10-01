@@ -12,8 +12,12 @@ public sealed partial class Binder
     private void DeclareProperty(PropertySyntax syntax, string ns, string owner)
     {
         var visibility = DeclarationVisibility(syntax.Modifiers, Visibility.Private, true, syntax.Location);
-        if (syntax.Modifiers.Any(m => m is not ("public" or "internal" or "private" or "required")) || types[owner].IsStatic)
-        { diagnostics.Error("WF2009", "Static and other modified properties remain required declaration work.", syntax.Location); return; }
+        var isStatic = syntax.Modifiers.Contains("static");
+        if (syntax.Modifiers.Any(m => m is not ("public" or "internal" or "private" or "required" or "static")))
+        { diagnostics.Error("WF2009", "This property modifier requires a later declaration pass.", syntax.Location); return; }
+        if (types[owner].IsStatic && !isStatic) diagnostics.Error("WF2012", "An instance property cannot belong to a static class.", syntax.Location);
+        if (isStatic && (syntax.Modifiers.Contains("required") || syntax.Accessors.Any(a => a.Kind == "init")))
+            diagnostics.Error("WF2032", "A static property cannot be required or have an init accessor.", syntax.Location);
         if (properties[owner].Any(p => p.Name == syntax.Name))
         { diagnostics.Error("WF2002", $"Duplicate property '{syntax.Name}'.", syntax.Location); return; }
         if (syntax.Accessors.Length == 0 || syntax.Accessors.Any(a => a.Kind is not ("get" or "set" or "init")) ||
@@ -32,7 +36,7 @@ public sealed partial class Binder
         if (automatic)
         {
             backing = new(nextSymbol++, "<" + syntax.Name + ">", Nominal(owner), type, syntax.Location,
-                Visibility.Private, !syntax.Accessors.Any(a => a.Kind == "set"), syntax.Modifiers.Contains("required"));
+                Visibility.Private, !syntax.Accessors.Any(a => a.Kind == "set"), syntax.Modifiers.Contains("required"), isStatic);
             fields[owner].Add((backing, syntax.Initializer));
         }
         FunctionSymbol? getter = null, setter = null;
@@ -53,19 +57,21 @@ public sealed partial class Binder
                 body = new([statement], accessor.Location);
             }
             var name = "<" + accessor.Kind + ":" + syntax.Name + ">";
-            Declare([new FunctionSyntax(name, resultType, parameters, body, [access.ToString().ToLowerInvariant()], accessor.Location, IsInitAccessor: accessor.Kind == "init")], ns, owner);
+            ImmutableArray<string> modifiers = isStatic ? [access.ToString().ToLowerInvariant(), "static"] : [access.ToString().ToLowerInvariant()];
+            Declare([new FunctionSyntax(name, resultType, parameters, body, modifiers, accessor.Location, IsInitAccessor: accessor.Kind == "init")], ns, owner);
             var symbol = functions[Qualify(owner, name)][0];
             if (get) getter = symbol; else setter = symbol;
         }
-        properties[owner].Add(new(syntax.Name, Nominal(owner), type, syntax.Location, visibility, getter, setter, backing, syntax.Accessors.Any(a => a.Kind == "init"), syntax.Modifiers.Contains("required")));
+        properties[owner].Add(new(syntax.Name, Nominal(owner), type, syntax.Location, visibility, getter, setter, backing, syntax.Accessors.Any(a => a.Kind == "init"), syntax.Modifiers.Contains("required"), isStatic));
     }
 
-    private IrExpression ReadProperty(PropertySymbol property, IrExpression receiver, SourceOrigin origin)
+    private IrExpression ReadProperty(PropertySymbol property, IrExpression? receiver, SourceOrigin origin)
     {
         if (property.Getter is null)
         { diagnostics.Error("WF2023", $"Property '{property.Name}' has no getter.", origin.Location); return Error(origin); }
         CheckAccessor(property.Getter, origin);
-        if (IsThis(receiver) && currentFunction.IsConstructor && property.BackingField is { } backing)
+        if (property.BackingField is { } backing && (IsThis(receiver) && currentFunction.IsConstructor ||
+            property.IsStatic && currentFunction.IsTypeInitializer && currentFunction.ContainingType == property.Owner.Name))
         { RequireFieldInitialized(backing, receiver, origin.Location); return new IrFieldRead(backing, receiver, origin); }
         if (IsThis(receiver)) RequireInitialized(origin.Location);
         return new IrCall(property.Getter, [], origin, Receiver: receiver);

@@ -17,10 +17,10 @@ public static class IrValidator
         foreach (var type in module.Classes.IsDefault ? [] : module.Classes)
         {
             var origin = new SourceOrigin(type.Symbol.Location);
-            if (!Enum.IsDefined(type.Symbol.Kind) || type.Symbol.IsStatic || !classes.TryAdd(type.Symbol.Name, type)) Fail("Invalid or duplicate IR class.", origin);
+            if (!Enum.IsDefined(type.Symbol.Kind) || type.Symbol.IsStatic && type.Symbol.Kind != DataKind.Class || !classes.TryAdd(type.Symbol.Name, type)) Fail("Invalid or duplicate IR class.", origin);
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
             foreach (var field in type.Fields)
-                if (field.Owner != new WeftType(TypeKind.Nominal, type.Symbol.Name) || !fields.TryAdd(field.Id, field) || !fieldNames.Add(field.Name))
+                if (type.Symbol.IsStatic && !field.IsStatic || field.IsStatic && field.Required || field.Owner != new WeftType(TypeKind.Nominal, type.Symbol.Name) || !fields.TryAdd(field.Id, field) || !fieldNames.Add(field.Name))
                     Fail("Invalid or duplicate IR field identity, name, or owner.", new(field.Location));
         }
         foreach (var field in fields.Values) CheckType(field.Type, false, new(field.Location));
@@ -37,6 +37,13 @@ public static class IrValidator
         foreach (var function in module.Functions)
         {
             currentFunction = function.Symbol;
+            if (currentFunction.ContainingType is { } owner && !classes.ContainsKey(owner))
+                Fail("IR function owner is not a registered type.", function.Origin);
+            if (currentFunction.IsTypeInitializer && (currentFunction.IsConstructor || currentFunction.IsInitAccessor ||
+                currentFunction.IsCopyConstructor || currentFunction.Receiver is not null || currentFunction.ReturnType != WeftType.Void ||
+                currentFunction.Parameters.Length != 0 || !classes.TryGetValue(currentFunction.ContainingType ?? "", out var initializedType) ||
+                initializedType.TypeInitializer != currentFunction))
+                Fail("Invalid IR type initializer signature or registration.", function.Origin);
             if (currentFunction.IsCopyConstructor && (!currentFunction.IsConstructor || currentFunction.Receiver is null ||
                 currentFunction.Parameters.Length != 1 || currentFunction.Parameters[0].Type != currentFunction.Receiver.Type ||
                 !classes.TryGetValue(currentFunction.ContainingType ?? "", out var copyOwner) ||
@@ -81,6 +88,10 @@ public static class IrValidator
             if (type.CopyConstructor is { } copyConstructor && (type.Symbol.Kind != DataKind.Record || !copyConstructor.IsCopyConstructor ||
                 copyConstructor.ContainingType != type.Symbol.Name || !functions.TryGetValue(copyConstructor.Id, out var declaredCopy) || declaredCopy != copyConstructor))
                 Fail("Invalid or unregistered IR copy constructor.", new(type.Symbol.Location));
+        foreach (var type in classes.Values)
+            if (type.TypeInitializer is { } initializer && (!initializer.IsTypeInitializer || initializer.ContainingType != type.Symbol.Name ||
+                !functions.TryGetValue(initializer.Id, out var registeredInitializer) || registeredInitializer != initializer))
+                Fail("Invalid or unregistered IR type initializer.", new(type.Symbol.Location));
         ConstructorGraph.Order(functions.Values.Where(f => f.IsConstructor), constructorTargets, cycle =>
             Fail("Circular IR constructor chain: " + string.Join(" -> ", cycle.Select(ConstructorGraph.Signature)) + ".", new(cycle[0].Location)));
         return diagnostics.ToImmutableArray();
@@ -88,7 +99,7 @@ public static class IrValidator
         void Fail(string message, SourceOrigin origin) => diagnostics.Error("WF3001", message, origin.Location);
         void CheckType(WeftType type, bool allowVoid, SourceOrigin origin)
         {
-            if (type != WeftType.Bool && type != WeftType.Int32 && type != WeftType.Int64 && type != WeftType.String && !(type.Kind == TypeKind.Nominal && type.Arguments.IsDefaultOrEmpty && classes.ContainsKey(type.Name)) && !(allowVoid && type == WeftType.Void))
+            if (type != WeftType.Bool && type != WeftType.Int32 && type != WeftType.Int64 && type != WeftType.String && !(type.Kind == TypeKind.Nominal && type.Arguments.IsDefaultOrEmpty && classes.TryGetValue(type.Name, out var declaredType) && !declaredType.Symbol.IsStatic) && !(allowVoid && type == WeftType.Void))
                 Fail($"Type '{type.Name}' is not in the executable IR version's portable type set.", origin);
         }
         void Statement(IrStatement statement, Dictionary<int, VariableSymbol> locals, HashSet<int> identities, WeftType returned, int loopDepth = 0)
@@ -175,7 +186,7 @@ public static class IrValidator
                     break;
                 case IrSetterCall setter:
                     Expression(new IrCall(setter.Setter, [setter.Value], setter.Origin, Receiver: setter.Receiver), locals);
-                    if (setter.Setter.ReturnType != WeftType.Void || setter.Setter.Parameters.Length != 1 || setter.Setter.Receiver is null)
+                    if (setter.Setter.ReturnType != WeftType.Void || setter.Setter.Parameters.Length != 1)
                         Fail("Invalid IR setter signature.", setter.Origin);
                     break;
                 case IrCopy copy:
@@ -255,6 +266,7 @@ public static class IrValidator
                     if (binary.Left.Type != binary.Right.Type || !valid) Fail("Invalid IR binary operator signature.", binary.Origin);
                     break;
                 case IrCall call:
+                    if (call.Function.IsTypeInitializer) Fail("IR type initializers cannot be invoked as ordinary calls.", call.Origin);
                     if (!functions.TryGetValue(call.Function.Id, out var target) || target != call.Function) Fail("IR call targets a missing or mismatched function.", call.Origin);
                     if (call.Function.IsInitAccessor && !(call.Receiver is IrRead initReceiver &&
                         (initializing.Contains(initReceiver.Symbol.Id) || initReceiver.Symbol == currentFunction?.Receiver &&
@@ -280,15 +292,18 @@ public static class IrValidator
                 default: Fail("Unrecognized IR expression; extend both backends and the validator together.", expression.Origin); break;
             }
         }
-        void Field(FieldSymbol field, IrExpression receiver, SourceOrigin origin, Dictionary<int, VariableSymbol> locals)
+        void Field(FieldSymbol field, IrExpression? receiver, SourceOrigin origin, Dictionary<int, VariableSymbol> locals)
         {
-            Expression(receiver, locals);
-            if (!fields.TryGetValue(field.Id, out var registered) || registered != field || receiver.Type != field.Owner)
+            if (receiver is not null) Expression(receiver, locals);
+            if (!fields.TryGetValue(field.Id, out var registered) || registered != field || field.IsStatic != (receiver is null) ||
+                !field.IsStatic && receiver?.Type != field.Owner)
                 Fail("IR field reference has an unknown field or mismatched owner.", origin);
         }
-        void Writable(FieldSymbol field, IrExpression receiver, SourceOrigin origin)
+        void Writable(FieldSymbol field, IrExpression? receiver, SourceOrigin origin)
         {
-            if (field.ReadOnly && !((currentFunction?.IsConstructor == true || currentFunction?.IsInitAccessor == true) && receiver is IrRead read && read.Symbol == currentFunction.Receiver))
+            if (field.ReadOnly && !(field.IsStatic
+                ? currentFunction?.IsTypeInitializer == true && currentFunction.ContainingType == field.Owner.Name
+                : (currentFunction?.IsConstructor == true || currentFunction?.IsInitAccessor == true) && receiver is IrRead read && read.Symbol == currentFunction.Receiver))
                 Fail("IR readonly field write is outside its constructor or init accessor.", origin);
         }
         void Arguments(ImmutableArray<WeftType> expected, ImmutableArray<IrExpression> actual, SourceOrigin origin, Dictionary<int, VariableSymbol> locals)

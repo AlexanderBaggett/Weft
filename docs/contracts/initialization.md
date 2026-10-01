@@ -113,8 +113,9 @@ source and malformed initialization IR; seven executable conformance cases cover
 required references, custom init bodies, nested/recursively empty getters, enclosing
 scope, and safe custom accessor timing on both runtimes.
 
-[Constructor chaining](constructors.md) and [ordinary models/records](data-types.md) are executable. Static initialization,
-inheritance/interfaces, collection/indexer
+[Constructor chaining](constructors.md), [ordinary models/records](data-types.md),
+and [static initialization](static-members.md) are executable.
+Inheritance/interfaces, collection/indexer
 initializers, remaining record features, and broader nullable/generic/closure integration remain
 required work. Constructor contracts that explicitly satisfy required members instead
 of requiring caller assignments are not implemented. No host attribute is accepted

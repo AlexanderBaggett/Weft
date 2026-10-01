@@ -54,7 +54,8 @@ be a readable field/property of the same type. It replaces the generated propert
 must provide its own initialization where required. Other constructors require a `this(...)` initializer, except record copy constructors.
 That initializer may target the primary, another ordinary, or a copy constructor.
 
-Record assignment aliases the original record. `==`, `!=`, and the generated typed
+[Static members](static-members.md) are supported but excluded from record data,
+equality, hashing, and copying. Record assignment aliases the original record. `==`, `!=`, and the generated typed
 `Equals(other)` compare stored data: declared instance fields, including private
 fields and automatic-property backing storage. Computed/custom getters do not run.
 Strings and nested records compare by value; class/model members compare by identity.

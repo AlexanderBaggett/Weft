@@ -24,8 +24,11 @@ public sealed partial class JvmEmitter
         foreach (var type in module.Classes.IsDefault ? [] : module.Classes)
         {
             writer.WriteLine($"private static final class {ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name))} {{", new(type.Symbol.Location));
-            foreach (var field in type.Fields) writer.WriteLine($"public {Type(field.Type)} m_{field.Id};", new(field.Location));
+            foreach (var field in type.Fields) writer.WriteLine($"public {(field.IsStatic ? "static " : "")}{Type(field.Type)} m_{field.Id};", new(field.Location));
             var name = ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name));
+            if (type.TypeInitializer is { } initializer)
+                writer.WriteLine($"static {{ f_{initializer.Id}(); }}");
+            writer.WriteLine("public static void touch() { }");
             if (type.Symbol.Kind is DataKind.Record or DataKind.Model)
             {
                 writer.WriteLine($"public {name} weftCopy() {{");
@@ -33,16 +36,16 @@ public sealed partial class JvmEmitter
                 else
                 {
                     writer.WriteLine($"{name} copy = new {name}();");
-                    foreach (var field in type.Fields) writer.WriteLine($"copy.m_{field.Id} = this.m_{field.Id};");
+                    foreach (var field in type.Fields.Where(f => !f.IsStatic)) writer.WriteLine($"copy.m_{field.Id} = this.m_{field.Id};");
                     writer.WriteLine("return copy; }");
                 }
             }
             if (type.Symbol.Kind == DataKind.Record)
             {
                 writer.WriteLine("@Override public boolean equals(Object obj) {");
-                writer.WriteLine($"return this == obj || obj instanceof {name} other" + string.Concat(type.Fields.Select(f => $" && java.util.Objects.equals(m_{f.Id}, other.m_{f.Id})")) + "; }");
+                writer.WriteLine($"return this == obj || obj instanceof {name} other" + string.Concat(type.Fields.Where(f => !f.IsStatic).Select(f => $" && java.util.Objects.equals(m_{f.Id}, other.m_{f.Id})")) + "; }");
                 writer.WriteLine("@Override public int hashCode() { int hash = 1;");
-                foreach (var field in type.Fields) writer.WriteLine($"hash = 31 * hash + java.util.Objects.hashCode(m_{field.Id});");
+                foreach (var field in type.Fields.Where(f => !f.IsStatic)) writer.WriteLine($"hash = 31 * hash + java.util.Objects.hashCode(m_{field.Id});");
                 writer.WriteLine("return hash; }");
             }
             writer.WriteLine("}");
@@ -51,14 +54,17 @@ public sealed partial class JvmEmitter
             writer.WriteLine($"private static {Type(result)} {ObjectEmission.SequenceName(ignored, result)}({Type(ignored)} ignored, {Type(result)} result) {{ return result; }}");
         foreach (var setter in ObjectEmission.Setters(module))
         {
-            writer.WriteLine($"private static {Type(setter.Parameters[0].Type)} p_{setter.Id}({Type(setter.Receiver!.Type)} receiver, {Type(setter.Parameters[0].Type)} value) {{", new(setter.Location, "property-assignment"));
-            writer.WriteLine($"f_{setter.Id}(receiver, value); return value;");
+            var receiverParameter = setter.Receiver is null ? "" : $"{Type(setter.Receiver.Type)} receiver, ";
+            writer.WriteLine($"private static {Type(setter.Parameters[0].Type)} p_{setter.Id}({receiverParameter}{Type(setter.Parameters[0].Type)} value) {{", new(setter.Location, "property-assignment"));
+            writer.WriteLine($"f_{setter.Id}({(setter.Receiver is null ? "" : "receiver, ")}value); return value;");
             writer.WriteLine("}");
         }
         foreach (var function in module.Functions)
         {
             writer.WriteLine($"private static {Type(function.Symbol.ReturnType)} f_{function.Symbol.Id}({string.Join(", ", ObjectEmission.Parameters(function.Symbol).Select(p => $"{Type(p.Type)} v_{p.Id}"))})", function.Origin);
             writer.WriteLine("{");
+            if (function.Symbol.ContainingType is { } owner && !function.Symbol.IsTypeInitializer)
+                writer.WriteLine($"{ObjectEmission.TypeName(new(TypeKind.Nominal, owner))}.touch();");
             foreach (var temporary in ObjectEmission.Temporaries(function)) writer.WriteLine($"{Type(temporary.Type)} v_{temporary.Id};");
             Statement(function.Body); writer.WriteLine("}");
         }
@@ -135,14 +141,22 @@ public sealed partial class JvmEmitter
     private static string StatementExpression(IrExpression expression) => expression switch
     {
         IrAssign assign => $"v_{assign.Symbol.Id} = {Expression(assign.Value)}",
-        IrFieldWrite write => $"({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)}",
+        IrFieldWrite write => $"{FieldTarget(write.Field, write.Receiver)} = {Expression(write.Value)}",
         IrFieldUpdate update => FieldUpdate(update),
         IrUpdate update => Update(update),
         _ => Expression(expression)
     };
+    private static string FieldTarget(FieldSymbol field, IrExpression? receiver) =>
+        field.IsStatic ? $"{ObjectEmission.TypeName(field.Owner)}.m_{field.Id}" : $"({Expression(receiver!)}).m_{field.Id}";
+    private static string ReadField(IrFieldRead read)
+    {
+        var field = FieldTarget(read.Field, read.Receiver);
+        return read.Field.IsStatic && read.Type.Kind is TypeKind.String or TypeKind.Nominal
+            ? $"weft.runtime.RuntimeContract.readStatic({field}, {Quote(read.Field.Owner.Name + "." + read.Field.Name)})" : field;
+    }
     private static string FieldUpdate(IrFieldUpdate update) => update.Postfix
-        ? $"({Expression(update.Receiver)}).m_{update.Field.Id}{update.Operator}"
-        : $"{update.Operator}({Expression(update.Receiver)}).m_{update.Field.Id}";
+        ? $"{FieldTarget(update.Field, update.Receiver)}{update.Operator}"
+        : $"{update.Operator}{FieldTarget(update.Field, update.Receiver)}";
     private static string Expression(IrExpression expression) => expression switch
     {
         IrConstant constant => constant.Value switch
@@ -153,12 +167,12 @@ public sealed partial class JvmEmitter
         },
         IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
         IrUpdate update => $"({Update(update)})",
-        IrSetterCall setter => $"p_{setter.Setter.Id}({Expression(setter.Receiver)}, {Expression(setter.Value)})",
+        IrSetterCall setter => $"p_{setter.Setter.Id}({(setter.Receiver is null ? "" : Expression(setter.Receiver) + ", ")}{Expression(setter.Value)})",
         IrCopy copy => $"({Expression(copy.Receiver)}).weftCopy()",
         IrObjectHash hash => $"({Expression(hash.Receiver)}).hashCode()",
         IrAllocate allocated => $"new {Type(allocated.Type)}()",
-        IrFieldRead read => $"({Expression(read.Receiver)}).m_{read.Field.Id}",
-        IrFieldWrite write => $"(({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)})",
+        IrFieldRead read => ReadField(read),
+        IrFieldWrite write => $"({FieldTarget(write.Field, write.Receiver)} = {Expression(write.Value)})",
         IrFieldUpdate update => $"({FieldUpdate(update)})",
         IrSequence sequence => ObjectEmission.Sequence(sequence, Expression),
         IrRead read => $"v_{read.Symbol.Id}",

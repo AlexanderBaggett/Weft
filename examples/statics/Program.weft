@@ -1,0 +1,24 @@
+namespace Demo;
+
+class Catalog {
+    public static readonly Catalog Default = new Catalog("main");
+    private static int created;
+    public static int Created => created;
+    public static int NextId { get; set; } = 100;
+    public string Name { get; }
+
+    private Catalog(string name) { Name = name; created++; }
+    static Catalog() { Print("catalog ready"); }
+    public static int Allocate() => NextId++;
+}
+
+static class Program {
+    public static void Main() {
+        Print("start");
+        Print(Catalog.Default.Name);
+        Print(Catalog.Created);
+        Print(Catalog.Allocate());
+        Print(Catalog.Allocate());
+        Print(Catalog.Default == Catalog.Default);
+    }
+}

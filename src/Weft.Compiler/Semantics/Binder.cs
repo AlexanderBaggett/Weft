@@ -46,6 +46,7 @@ public sealed partial class Binder
                 foreach (var parameter in symbol.Parameters)
                     if (!scope.Declare(parameter)) diagnostics.Error("WF2002", $"Duplicate parameter '{parameter.Name}'.", parameter.Location);
             var prefix = ImmutableArray.CreateBuilder<IrStatement>();
+            if (symbol.IsTypeInitializer) BindStaticInitializers(prefix);
             if (symbol.Receiver is not null)
             {
                 if (!symbol.IsConstructor) scope.Declare(symbol.Receiver);
@@ -63,7 +64,7 @@ public sealed partial class Binder
                         bindingFieldInitializer = true;
                         foreach (var (field, initializer) in symbol.IsCopyConstructor ? [] : fields[symbol.ContainingType!])
                         {
-                            if (initializer is null) continue;
+                            if (field.IsStatic || initializer is null) continue;
                             var value = ConvertImplicit(BindExpression(initializer), field.Type);
                             prefix.Add(new IrExpressionStatement(new IrFieldWrite(field, This(origin), value, new(initializer.Location)), new(initializer.Location)));
                             initializedFields.Add(field.Id);
@@ -89,13 +90,18 @@ public sealed partial class Binder
                     prefix.Add(new IrReturn(This(new(syntax.Location)), new(syntax.Location, "constructor-result")));
                 }
                 body = body with { Statements = prefix.ToImmutable() };
-                constructorInitializedFields[symbol.Id] = IntersectStates(constructorExits, fields[symbol.ContainingType!].Select(f => f.Symbol.Id).ToHashSet());
+                constructorInitializedFields[symbol.Id] = IntersectStates(constructorExits, fields[symbol.ContainingType!].Where(f => !f.Symbol.IsStatic).Select(f => f.Symbol.Id).ToHashSet());
+            }
+            if (symbol.IsTypeInitializer)
+            {
+                if (ControlFlow.CanComplete(body)) RequireStaticInitialized(syntax.Location);
+                body = body with { Statements = prefix.ToImmutable().AddRange(body.Statements) };
             }
             if (symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(body)) diagnostics.Error("WF2007", $"Not all paths in '{symbol.Name}' return '{symbol.ReturnType.Name}'.", syntax.Location);
             bound.Add(new(symbol, body, new(syntax.Location)));
         }
         bound.AddRange(recordOperations);
-        var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion, types.Values.Where(t => !t.IsStatic).Select(t => new IrClass(t, fields[t.Name].Select(f => f.Symbol).ToImmutableArray(), functions.Values.SelectMany(group => group).SingleOrDefault(f => f.IsCopyConstructor && f.ContainingType == t.Name))).ToImmutableArray());
+        var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion, types.Values.Select(t => new IrClass(t, fields[t.Name].Select(f => f.Symbol).ToImmutableArray(), functions.Values.SelectMany(group => group).SingleOrDefault(f => f.IsCopyConstructor && f.ContainingType == t.Name), functions.Values.SelectMany(group => group).Single(f => f.IsTypeInitializer && f.ContainingType == t.Name))).ToImmutableArray());
         return new(module, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray(), properties.Values.SelectMany(p => p).ToImmutableArray());
     }
 
@@ -151,6 +157,7 @@ public sealed partial class Binder
                 if (!scope.Declare(symbol)) diagnostics.Error("WF2002", $"Duplicate local '{variable.Name}'.", variable.Location);
                 return new IrVariable(symbol, initializer, origin);
             case ReturnSyntax returned:
+                if (currentFunction.IsTypeInitializer) RequireStaticInitialized(returned.Location);
                 if (currentFunction.IsConstructor)
                 {
                     if (returned.Expression is not null) diagnostics.Error("WF2003", "A constructor return cannot specify a value.", returned.Location);

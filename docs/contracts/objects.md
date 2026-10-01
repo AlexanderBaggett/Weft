@@ -122,10 +122,10 @@ returns while traversing function bodies for generated helpers.
 
 [Object/nested initializers, required members, and init accessors](initialization.md)
 and [constructor chaining](constructors.md) are executable, as are
-[model/record construction, value equality and copying](data-types.md).
+[model/record construction, value equality and copying](data-types.md) and
+[static fields/properties/type initialization](static-members.md).
 Record customization/display/deconstruction, inheritance/interfaces, nested and generic types,
-nullable references, static fields/properties and type initialization,
-indexers, and callable members remain required work. See [properties](properties.md)
+nullable references, indexers, and callable members remain required work. See [properties](properties.md)
 for currently executable accessor forms.
 Current emitted classes are an implementation detail, not a separately consumable
 assembly/JAR API; public packaging and metadata are tracked in Phase 6. This checkpoint

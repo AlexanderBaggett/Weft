@@ -1,0 +1,7 @@
+{
+  "id": "static-cycles-and-singleton",
+  "sources": {
+    "main.weft": "class A { public static int X = B.Y + 1; }\nclass B { public static int Y = A.X + 1; }\nclass Singleton {\n public static readonly Singleton Instance = new Singleton();\n public static readonly string Name = \"Ada\";\n public int N;\n private Singleton() { Print(\"instance\"); N = 4; }\n static Singleton() { Print(\"static\"); }\n}\nvoid Main() {\n Print(A.X); Print(B.Y); Print(Singleton.Instance.N);\n Print(Singleton.Instance == Singleton.Instance); Print(Singleton.Name);\n}\n"
+  },
+  "stdout": "2\n1\ninstance\nstatic\n4\ntrue\nAda\n"
+}

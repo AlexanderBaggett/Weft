@@ -1,6 +1,6 @@
 # Phase 02: Language foundation and message runtime
 
-**Status:** In progress — ordinary functions, classes, construction, and structured control flow (P02-001/002/003).
+**Status:** In progress — ordinary functions, classes/models/records, static/instance data, construction, and structured control flow (P02-001/002/003).
 
 **Outcome:** Implement the ordinary language, standard-library foundation, async/message lifetime machinery, and service/receiver runtime behavior on both platforms.
 
@@ -59,6 +59,8 @@ All tasks contribute to the first full release on both backends. Follow the [tra
 - [ ] P02-033 — Verify nested scopes, child failures, cancellation/disconnect propagation, deadlines, queued service calls, ambient captures, and exact disposal ordering. (W005, W010–W012)
 - [ ] P02-034 — Verify bounded channel overload and timer overlap/cancellation behavior using controlled workloads and clocks. (W025, W026)
 - [ ] P02-035 — Complete compiler/runtime integration on both backends, update examples and documentation, and record evidence and unresolved cross-phase tasks in the feature register. (W001, W002, W005, W010–W012, W018)
+
+- [ ] P02-036 — Complete portable type-initialization failure/rethrow behavior and cross-thread dependency-cycle handling as exception/task/lock support integrates; retain once-only publication and non-null guarantees on both runtimes. Current single-thread cycles, concurrent acyclic first use, and failed-initializer no-retry checks are in the [static contract](../../contracts/static-members.md). (W001, W002, W005)
 
 ## Decisions and blockers
 
@@ -259,7 +261,7 @@ integration stay required. No parent task is marked complete by this checkpoint.
 
 ### Model/record checkpoint — 2026-09-30
 
-Worktree based on `50829b0`, extending P02-003/011/032. Plain models retain identity
+Committed and pushed as `59e2b1c`, extending P02-003/011/032. Plain models retain identity
 and default public fields. Body/positional records retain reference layout while
 comparing/hash-combining stored data. Positional get/init properties and constructor
 parameters reuse ordinary overload and initialization checks. Shallow `with` copies
@@ -290,8 +292,39 @@ Record customization, source-callable synthesized copy constructors,
 display/deconstruction, inheritance and broader type/provenance integration stay
 required work. No parent task is marked complete.
 
-**Next:** continue P02-003 with remaining record features and static member/type initialization,
-then the remaining inheritance/type work under P02-004. Generic/interface/nullable types and complete public
+### Static-member checkpoint — 2026-10-01
+
+Worktree based on `59e2b1c`, extending P02-003/011/032. Static fields, auto/custom
+properties, readonly/getter-only writes, and explicit static constructors execute on
+both backends. Registered type initializers run declaration initializers in order
+before the constructor body. Method/constructor entry and static field access activate
+the owning type. Runtime guards preserve non-null references through indirect reentry.
+Static storage is excluded from instance initialization and record equality/hash/copy.
+See [static members](../../contracts/static-members.md) and the
+[runnable example](../../../examples/statics/Program.weft).
+
+- `dotnet test Weft.slnx --no-restore`: **432 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Seven new executable conformance programs bring the case count to 65. Thirty-two
+  static binding/IR checks cover declaration/access rules, non-null storage,
+  registration, readonly authority, and invalid direct initializer calls.
+- Four native runtime harness cases verify serialized concurrent first use and
+  cached failure after an indirect uninitialized-reference read on both targets.
+  The harnesses use events/latches rather than sleeps or timing assertions.
+- Independent implementation/documentation/example review is complete. Review found
+  that an ordinary method could name an unregistered owner in malformed IR; validation
+  now rejects it, with regression coverage and an independent recheck. Extra reviewer
+  programs passed on both targets for initializer reentry, nested assignments,
+  compound evaluation, constructor-chain ordering, and static reference properties.
+- CLI runs of the static example on both backends printed `start`, `catalog ready`,
+  `main`, `1`, `100`, `101`, and `true`. All 48 Markdown documents have valid relative
+  link targets and `git diff --check` passes. Hosted CI remains deferred.
+
+P02-036 explicitly retains uniform exception wrappers and cross-thread initialization
+cycles for the complete release. No parent task is marked complete.
+
+**Next:** continue P02-003 with remaining record features, then the remaining
+inheritance/type work under P02-004. Generic/interface/nullable types and complete public
 project contracts remain under their original tasks before services and shared
 middleware integration. Preserve the accepted pipeline syntax; its graph/project binding remains
 owned by P03-001 and P06-001/003. Append new work with unused task IDs when scope grows.

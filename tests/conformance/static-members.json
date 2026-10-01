@@ -1,0 +1,8 @@
+{
+  "id": "static-members",
+  "sources": {
+    "main.weft": "namespace Demo;\nclass Box { public int N; }\nstatic class State {\n public static int Count;\n public static long Long = 4L;\n public static readonly string Name;\n public static string Label { get; } = \"ready\";\n public static int Value { get; private set; }\n public static Box Box = new Box { N = 2 };\n static State() { Name = \"Ada\"; Label = \"done\"; Value = 3; }\n public static int Add(int n) { Count += n; Value++; return Value; }\n}\nvoid Main() {\n Print(State.Count); Print(State.Name + \":\" + State.Label); Print(State.Add(2));\n Print(State.Count++); Print(++State.Count); Print(State.Long += 2);\n State.Box.N++; Print(State.Box.N); Print(State.Value);\n}\n"
+  },
+  "stdout": "0\nAda:done\n4\n2\n4\n6\n3\n4\n",
+  "entry": "Demo.Main"
+}

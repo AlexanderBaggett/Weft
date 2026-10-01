@@ -106,6 +106,7 @@ receiver reassignment, named arguments, loops, short-circuiting, and signed limi
 WF2023 identifies a missing required accessor; WF2024 identifies invalid accessor
 structure or accessibility. Existing WF2011, WF2019, and WF2022 cover access, public
 contracts, and non-null construction. [Object initializers and init accessors](initialization.md)
-are now executable. Static properties/type initialization, indexers, inheritance/
+and [static properties/type initialization](static-members.md) are now executable.
+Indexers, inheritance/
 interfaces, and complete generic/nullable types remain required work under their
-original tasks. Unsupported static properties currently receive WF2009.
+original tasks.

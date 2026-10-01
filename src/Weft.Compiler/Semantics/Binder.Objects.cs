@@ -10,16 +10,19 @@ public sealed partial class Binder
     private HashSet<int> initializedFields = [];
     private bool bindingFieldInitializer;
     private IrRead This(SourceOrigin origin) => new(currentFunction.Receiver!, origin);
-    private bool IsThis(IrExpression receiver) => receiver is IrRead read && read.Symbol == currentFunction.Receiver;
+    private bool IsThis(IrExpression? receiver) => receiver is IrRead read && read.Symbol == currentFunction.Receiver;
     private void RequireInitialized(SourceLocation location, bool completing = false)
     {
         if (!currentFunction.IsConstructor) return;
-        var missing = fields[currentFunction.ContainingType!].Where(f => f.Symbol.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(f.Symbol.Id) && !(completing && f.Symbol.Required && !currentFunction.IsCopyConstructor)).Select(f => f.Symbol.Name).ToArray();
+        var missing = fields[currentFunction.ContainingType!].Where(f => !f.Symbol.IsStatic && f.Symbol.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(f.Symbol.Id) && !(completing && f.Symbol.Required && !currentFunction.IsCopyConstructor)).Select(f => f.Symbol.Name).ToArray();
         if (missing.Length > 0) diagnostics.Error("WF2022", "Constructor must initialize non-null fields before this escapes: " + string.Join(", ", missing) + ".", location);
     }
-    private void RequireFieldInitialized(FieldSymbol field, IrExpression receiver, SourceLocation location)
+    private void RequireFieldInitialized(FieldSymbol field, IrExpression? receiver, SourceLocation location)
     {
-        if (currentFunction.IsConstructor && IsThis(receiver) && field.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(field.Id))
+        if (field.IsStatic && currentFunction.IsTypeInitializer && field.Owner.Name == currentFunction.ContainingType &&
+            field.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(field.Id))
+            diagnostics.Error("WF2033", $"Static field '{field.Name}' is read before it is initialized.", location);
+        if (!field.IsStatic && currentFunction.IsConstructor && IsThis(receiver) && field.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(field.Id))
             diagnostics.Error("WF2022", $"Field '{field.Name}' is read before it is initialized.", location);
     }
     private bool IsStaticQualifier(ExpressionSyntax target, out string? qualifier)
@@ -49,25 +52,38 @@ public sealed partial class Binder
     private WeftType? MemberType(string owner, string name) =>
         fields[owner].FirstOrDefault(f => f.Symbol.Name == name).Symbol?.Type ?? properties[owner].FirstOrDefault(p => p.Name == name)?.Type;
 
+    private bool StaticMember(string owner, string name) => fields[owner].FirstOrDefault(f => f.Symbol.Name == name).Symbol?.IsStatic
+        ?? properties[owner].FirstOrDefault(p => p.Name == name)?.IsStatic ?? false;
+
     private BoundTarget? BindImplicitMember(string name, SourceLocation location)
     {
         if (currentFunction.ContainingType is not { } owner || MemberType(owner, name) is null) return null;
+        if (StaticMember(owner, name)) return SelectMember(owner, name, null, new(location));
         if (currentFunction.Receiver is null || bindingFieldInitializer)
         { diagnostics.Error("WF2020", "An instance member requires an object; initializers cannot access this.", location); return null; }
         return SelectMember(owner, name, This(new(location)), new(location));
     }
     private BoundTarget? BindMember(MemberSyntax member)
     {
+        if (IsStaticQualifier(member.Target, out var qualifier) && qualifier is not null && fields.ContainsKey(qualifier))
+        {
+            if (MemberType(qualifier, member.Member) is null)
+            { diagnostics.Error("WF2001", $"Type '{qualifier}' has no field or property '{member.Member}'.", member.Location); return null; }
+            return SelectMember(qualifier, member.Member, null, new(member.Location));
+        }
         var receiver = member.Target is NameSyntax { Name: "this" } && currentFunction.Receiver is not null && !bindingFieldInitializer
             ? This(new(member.Target.Location)) : BindExpression(member.Target);
         if (!fields.ContainsKey(receiver.Type.Name) || MemberType(receiver.Type.Name, member.Member) is null)
         { if (receiver.Type != WeftType.Error) diagnostics.Error("WF2001", $"Type '{receiver.Type.Name}' has no field or property '{member.Member}'.", member.Location); return null; }
         return SelectMember(receiver.Type.Name, member.Member, receiver, new(member.Location));
     }
-    private BoundTarget SelectMember(string owner, string name, IrExpression receiver, SourceOrigin origin)
+    private BoundTarget SelectMember(string owner, string name, IrExpression? receiver, SourceOrigin origin)
     {
         var field = fields[owner].FirstOrDefault(f => f.Symbol.Name == name).Symbol;
         var property = properties[owner].FirstOrDefault(p => p.Name == name);
+        var isStatic = field?.IsStatic ?? property!.IsStatic;
+        if (isStatic != (receiver is null))
+            diagnostics.Error("WF2020", isStatic ? "A static member must be selected through its type, not an object." : "An instance member requires an object receiver.", origin.Location);
         if ((field?.Visibility ?? property!.Visibility) == Visibility.Private && owner != currentFunction.ContainingType)
             diagnostics.Error("WF2011", $"Member '{name}' is inaccessible from this location.", origin.Location);
         return new(null, field, property, receiver, origin);
@@ -95,14 +111,16 @@ public sealed partial class Binder
         {
             if (property.InitOnly && !target.Initializing && !(IsThis(target.Receiver!) && (currentFunction.IsConstructor || currentFunction.IsInitAccessor)))
                 diagnostics.Error("WF2025", $"Init-only property '{property.Name}' can be assigned only during construction.", target.Origin.Location);
-            if (property.BackingField is { } backing && currentFunction.IsConstructor && IsThis(target.Receiver!))
+            if (property.BackingField is { } backing && (currentFunction.IsConstructor && IsThis(target.Receiver) ||
+                property.IsStatic && currentFunction.IsTypeInitializer && property.Owner.Name == currentFunction.ContainingType))
                 target = target with { Property = null, Field = backing };
             else if (property.Setter is null)
                 diagnostics.Error("WF2023", $"Property '{property.Name}' has no setter.", target.Origin.Location);
             else CheckAccessor(property.Setter, target.Origin);
         }
-        if (target.Field is { ReadOnly: true } field && !((currentFunction.IsConstructor || currentFunction.IsInitAccessor) && IsThis(target.Receiver!) && field.Owner.Name == currentFunction.ContainingType))
-            diagnostics.Error("WF2021", $"Readonly field '{field.Name}' can be assigned only through this in its constructor or an init accessor.", target.Origin.Location);
+        if (target.Field is { ReadOnly: true } field && !(field.Owner.Name == currentFunction.ContainingType &&
+            (field.IsStatic ? currentFunction.IsTypeInitializer : (currentFunction.IsConstructor || currentFunction.IsInitAccessor) && IsThis(target.Receiver))))
+            diagnostics.Error("WF2021", $"Readonly field '{field.Name}' can be assigned only in its matching constructor or initializer.", target.Origin.Location);
         return target;
     }
     private IrExpression WriteTarget(BoundTarget target, IrExpression value, SourceOrigin origin)
@@ -111,7 +129,7 @@ public sealed partial class Binder
         if (target.Local is { } local) return new IrAssign(local, value, origin);
         if (target.Field is { } field)
         {
-            if (IsThis(target.Receiver!)) initializedFields.Add(field.Id);
+            if (IsThis(target.Receiver) || field.IsStatic && currentFunction.IsTypeInitializer && field.Owner.Name == currentFunction.ContainingType) initializedFields.Add(field.Id);
             return new IrFieldWrite(field, target.Receiver!, value, origin);
         }
         if (IsThis(target.Receiver!)) RequireInitialized(origin.Location);

@@ -9,6 +9,8 @@ public static class RuntimeContract
     {
         if (expected != Abi) throw new InvalidOperationException($"Weft runtime ABI {Abi} cannot execute ABI {expected}.");
     }
+    public static T ReadStatic<T>(T? value, string field) where T : class => value
+        ?? throw new InvalidOperationException($"Static field '{field}' was read before initialization.");
     public static void WriteLine(string value) => Console.WriteLine(value);
     public static string Text(int value) => value.ToString(CultureInfo.InvariantCulture);
     public static string Text(long value) => value.ToString(CultureInfo.InvariantCulture);
