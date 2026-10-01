@@ -1,0 +1,7 @@
+{
+  "id": "updates-in-control-flow",
+  "sources": {
+    "main.weft": "int Join(int first, int second) => first * 10 + second;\nvoid Main() {\n    var total = 0;\n    for (var i = 0; i < 4; i++) { if (i == 1) continue; total += i; }\n    Print(total);\n    var n = 0;\n    Print(Join(second: n++, first: ++n)); Print(n);\n    Print(false && n++ == 0); Print(n);\n    Print(true || ++n == 0); Print(n);\n    Print(false ? n++ : ++n); Print(n);\n    do { total--; } while (total > 2);\n    Print(total);\n    while (--n > 0) ;\n    Print(n);\n}"
+  },
+  "stdout": "5\n20\n2\nfalse\n2\ntrue\n2\n3\n3\n2\n0\n"
+}

@@ -70,7 +70,7 @@ public static class IrValidator
                     break;
                 case IrExpressionStatement expression:
                     Expression(expression.Expression, locals);
-                    if (expression.Expression is not (IrAssign or IrCall or IrIntrinsic)) Fail("IR expression statement must be a call or assignment.", expression.Origin);
+                    if (expression.Expression is not (IrAssign or IrCall or IrIntrinsic or IrUpdate)) Fail("IR expression statement must be a call, assignment, or increment/decrement operation.", expression.Origin);
                     break;
                 case IrIf conditional:
                     Expression(conditional.Condition, locals);
@@ -131,6 +131,11 @@ public static class IrValidator
                 case IrAssign assign:
                     Expression(new IrRead(assign.Symbol, assign.Origin), locals); Expression(assign.Value, locals);
                     if (assign.Type != assign.Value.Type) Fail("IR assignment type mismatch.", assign.Origin);
+                    break;
+                case IrUpdate update:
+                    Expression(new IrRead(update.Symbol, update.Origin), locals);
+                    if (!Integer(update.Type) || update.Operator is not ("++" or "--"))
+                        Fail("Invalid IR increment/decrement operation.", update.Origin);
                     break;
                 case IrUnary unary:
                     Expression(unary.Operand, locals);

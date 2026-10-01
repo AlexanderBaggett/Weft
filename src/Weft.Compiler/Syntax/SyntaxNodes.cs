@@ -43,6 +43,7 @@ public abstract record ExpressionSyntax(SourceLocation Location) : SyntaxNode(Lo
 public sealed record LiteralSyntax(SyntaxToken Token) : ExpressionSyntax(Token.Location);
 public sealed record NameSyntax(string Name, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record UnarySyntax(string Operator, ExpressionSyntax Operand, SourceLocation Location) : ExpressionSyntax(Location);
+public sealed record UpdateSyntax(string Operator, ExpressionSyntax Operand, bool Postfix, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record BinarySyntax(ExpressionSyntax Left, string Operator, ExpressionSyntax Right, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record ConditionalSyntax(ExpressionSyntax Condition, ExpressionSyntax WhenTrue, ExpressionSyntax WhenFalse,
     SourceLocation Location) : ExpressionSyntax(Location);

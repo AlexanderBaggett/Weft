@@ -23,6 +23,7 @@ public abstract record IrExpression(WeftType Type, SourceOrigin Origin) : IrNode
 public sealed record IrConstant(object Value, WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrRead(VariableSymbol Symbol, SourceOrigin Origin) : IrExpression(Symbol.Type, Origin);
 public sealed record IrAssign(VariableSymbol Symbol, IrExpression Value, SourceOrigin Origin) : IrExpression(Symbol.Type, Origin);
+public sealed record IrUpdate(VariableSymbol Symbol, string Operator, bool Postfix, SourceOrigin Origin) : IrExpression(Symbol.Type, Origin);
 public sealed record IrUnary(string Operator, IrExpression Operand, WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrBinary(IrExpression Left, string Operator, IrExpression Right, WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 // Arguments remain in written evaluation order. ParameterOrder maps each argument to

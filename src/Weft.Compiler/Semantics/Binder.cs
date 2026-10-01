@@ -185,7 +185,7 @@ public sealed class Binder
                 return new IrReturn(value, origin);
             case ExpressionStatementSyntax expression:
                 var bound = BindExpression(expression.Expression);
-                if (bound.Type != WeftType.Error && bound is not (IrCall or IrIntrinsic or IrAssign)) diagnostics.Error("WF2008", "Only calls or assignments may be expression statements.", expression.Location);
+                if (bound.Type != WeftType.Error && bound is not (IrCall or IrIntrinsic or IrAssign or IrUpdate)) diagnostics.Error("WF2008", "Only calls, assignments, or increment/decrement operations may be expression statements.", expression.Location);
                 return new IrExpressionStatement(bound, origin);
             case IfSyntax conditional:
                 var condition = BindExpression(conditional.Condition); Require(WeftType.Bool, condition.Type, condition.Origin.Location);
@@ -260,27 +260,25 @@ public sealed class Binder
                 if (unary.Operator == "!") Require(WeftType.Bool, operand.Type, unary.Location);
                 else if (!IsInteger(operand.Type)) diagnostics.Error("WF2003", $"Operator '{unary.Operator}' requires an integer.", unary.Location);
                 return new IrUnary(unary.Operator, operand, operand.Type, origin);
-            case BinarySyntax binary when binary.Operator == "=":
+            case UpdateSyntax update:
+                var updated = update.Operand is NameSyntax updateTarget ? scope.Lookup(updateTarget.Name) : null;
+                if (updated is null)
+                {
+                    diagnostics.Error("WF2005", "Increment/decrement requires a declared local or parameter.", update.Location);
+                    return Error(origin);
+                }
+                if (!IsInteger(updated.Type)) diagnostics.Error("WF2003", "Increment/decrement currently requires an int32 or int64 variable.", update.Location);
+                return new IrUpdate(updated, update.Operator, update.Postfix, origin);
+            case BinarySyntax { Operator: "=" or "+=" or "-=" or "*=" or "/=" or "%=" } binary:
                 var assigned = binary.Left is NameSyntax target ? scope.Lookup(target.Name) : null;
                 var rhs = BindExpression(binary.Right);
                 if (assigned is null) { diagnostics.Error("WF2005", "Assignment requires a declared local or parameter.", binary.Location); return Error(origin); }
+                if (binary.Operator != "=")
+                    rhs = BindBinary(new IrRead(assigned, new(binary.Left.Location)), binary.Operator[..1], rhs, origin);
                 rhs = ConvertImplicit(rhs, assigned.Type);
                 return new IrAssign(assigned, rhs, origin);
             case BinarySyntax binary:
-                var left = BindExpression(binary.Left); var right = BindExpression(binary.Right);
-                var op = binary.Operator;
-                if (op == "+" && (left.Type == WeftType.String || right.Type == WeftType.String))
-                    return new IrBinary(AsString(left), op, AsString(right), WeftType.String, origin);
-                if (IsInteger(left.Type) && IsInteger(right.Type) && left.Type != right.Type)
-                {
-                    left = ConvertImplicit(left, WeftType.Int64); right = ConvertImplicit(right, WeftType.Int64);
-                }
-                Require(left.Type, right.Type, binary.Location);
-                if (left.Type == WeftType.Void || right.Type == WeftType.Void) diagnostics.Error("WF2003", "A void expression cannot be an operator operand.", binary.Location);
-                if (op is "&&" or "||") Require(WeftType.Bool, left.Type, binary.Location);
-                else if (op is not ("==" or "!=") && !IsInteger(left.Type)) diagnostics.Error("WF2003", $"Operator '{op}' requires integer operands.", binary.Location);
-                var result = op is "==" or "!=" or "<" or ">" or "<=" or ">=" or "&&" or "||" ? WeftType.Bool : left.Type;
-                return new IrBinary(left, op, right, result, origin);
+                return BindBinary(BindExpression(binary.Left), binary.Operator, BindExpression(binary.Right), origin);
             case ConditionalSyntax conditional:
                 var condition = BindExpression(conditional.Condition); Require(WeftType.Bool, condition.Type, condition.Origin.Location);
                 var whenTrue = BindExpression(conditional.WhenTrue); var whenFalse = BindExpression(conditional.WhenFalse);
@@ -297,6 +295,22 @@ public sealed class Binder
                 diagnostics.Error("WF2009", $"Expression '{syntax.GetType().Name}' is represented but not implemented yet.", syntax.Location);
                 return Error(origin);
         }
+    }
+
+    private IrExpression BindBinary(IrExpression left, string op, IrExpression right, SourceOrigin origin)
+    {
+        if (op == "+" && (left.Type == WeftType.String || right.Type == WeftType.String))
+            return new IrBinary(AsString(left), op, AsString(right), WeftType.String, origin);
+        if (IsInteger(left.Type) && IsInteger(right.Type) && left.Type != right.Type)
+        {
+            left = ConvertImplicit(left, WeftType.Int64); right = ConvertImplicit(right, WeftType.Int64);
+        }
+        Require(left.Type, right.Type, origin.Location);
+        if (left.Type == WeftType.Void || right.Type == WeftType.Void) diagnostics.Error("WF2003", "A void expression cannot be an operator operand.", origin.Location);
+        if (op is "&&" or "||") Require(WeftType.Bool, left.Type, origin.Location);
+        else if (op is not ("==" or "!=") && !IsInteger(left.Type)) diagnostics.Error("WF2003", $"Operator '{op}' requires integer operands.", origin.Location);
+        var result = op is "==" or "!=" or "<" or ">" or "<=" or ">=" or "&&" or "||" ? WeftType.Bool : left.Type;
+        return new IrBinary(left, op, right, result, origin);
     }
 
     private Visibility DeclarationVisibility(ImmutableArray<string> modifiers, Visibility fallback, bool allowPrivate, SourceLocation location)

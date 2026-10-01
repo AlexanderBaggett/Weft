@@ -16,7 +16,7 @@ public sealed class Lexer(SourceText source)
     private int position;
     private char Current => position < source.Text.Length ? source.Text[position] : '\0';
     private char Peek(int offset) => position + offset < source.Text.Length ? source.Text[position + offset] : '\0';
-    private static readonly HashSet<string> Pairs = ["=>", "->", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "..", "++", "--", "+=", "-=", "*=", "/=", "::"];
+    private static readonly HashSet<string> Pairs = ["=>", "->", "==", "!=", "<=", ">=", "&&", "||", "??", "?.", "..", "++", "--", "+=", "-=", "*=", "/=", "%=", "::"];
 
     public LexResult Lex()
     {

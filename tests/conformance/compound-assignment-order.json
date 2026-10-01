@@ -1,0 +1,7 @@
+{
+  "id": "compound-assignment-order",
+  "sources": {
+    "main.weft": "void Main() {\n    var x = 10;\n    Print(x += (x = 3)); Print(x);\n    Print(x *= x++); Print(x);\n    Print(x -= ++x); Print(x);\n    x = 20; Print(x /= (x = 4)); Print(x);\n    x = 20; Print(x %= (x = 6)); Print(x);\n    var a = 1; var b = 2;\n    Print(a += b *= 3); Print(a); Print(b);\n    long wide = 1; wide += 12; Print(wide);\n    var text = \"A\"; Print(text += (text = \"B\")); Print(text);\n    text += 5; Print(text);\n    var min = -2147483648; min %= -1; Print(min);\n    x = 2147483647; x += 1; Print(x);\n}"
+  },
+  "stdout": "13\n13\n169\n169\n-1\n-1\n5\n5\n2\n2\n7\n7\n6\n13\nAB\nAB\nAB5\n0\n-2147483648\n"
+}

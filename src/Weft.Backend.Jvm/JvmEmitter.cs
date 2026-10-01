@@ -91,7 +91,14 @@ public sealed partial class JvmEmitter
             text.Append(ch switch { '\\' => "\\\\", '"' => "\\\"", '\n' => "\\n", '\r' => "\\r", '\t' => "\\t", '\0' => "\\000", _ when ch < 32 || ch > 126 => "\\u" + ((int)ch).ToString("x4", CultureInfo.InvariantCulture), _ => ch.ToString() });
         return text.Append('"').ToString();
     }
-    private static string StatementExpression(IrExpression expression) => expression is IrAssign assign ? $"v_{assign.Symbol.Id} = {Expression(assign.Value)}" : Expression(expression);
+    private static string Update(IrUpdate update) => update.Postfix
+        ? $"v_{update.Symbol.Id}{update.Operator}" : $"{update.Operator}v_{update.Symbol.Id}";
+    private static string StatementExpression(IrExpression expression) => expression switch
+    {
+        IrAssign assign => $"v_{assign.Symbol.Id} = {Expression(assign.Value)}",
+        IrUpdate update => Update(update),
+        _ => Expression(expression)
+    };
     private static string Expression(IrExpression expression) => expression switch
     {
         IrConstant constant => constant.Value switch
@@ -101,6 +108,7 @@ public sealed partial class JvmEmitter
             _ => throw new InvalidOperationException("Unsupported IR constant.")
         },
         IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
+        IrUpdate update => $"({Update(update)})",
         IrRead read => $"v_{read.Symbol.Id}",
         IrConvert convert => $"((long)({Expression(convert.Operand)}))",
         IrAssign assign => $"(v_{assign.Symbol.Id} = {Expression(assign.Value)})",

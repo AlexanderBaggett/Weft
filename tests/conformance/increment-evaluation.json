@@ -1,0 +1,7 @@
+{
+  "id": "increment-evaluation",
+  "sources": {
+    "main.weft": "int Next(int x) { return ++x; }\nvoid Main() {\n    var i = 1;\n    Print(i++ + ++i); Print(i);\n    Print(--i + i--); Print(i);\n    Print(-i++); Print(i);\n    Print(Next(i)); Print(i);\n    var max = 2147483647;\n    Print(max++); Print(max); Print(--max);\n    var wide = 9223372036854775807L;\n    Print(++wide); Print(wide--); Print(wide);\n}"
+  },
+  "stdout": "4\n3\n4\n1\n-1\n2\n3\n2\n2147483647\n-2147483648\n2147483647\n-9223372036854775808\n-9223372036854775808\n9223372036854775807\n"
+}

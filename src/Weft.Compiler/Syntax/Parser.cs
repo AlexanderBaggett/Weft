@@ -267,12 +267,16 @@ public sealed class Parser
     }
 
     private static int Precedence(string token) => token switch
-    { "=" => 1, "||" => 3, "&&" => 4, "==" or "!=" => 5, "<" or ">" or "<=" or ">=" => 6, "+" or "-" => 7, "*" or "/" or "%" => 8, _ => 0 };
+    { "=" or "+=" or "-=" or "*=" or "/=" or "%=" => 1, "||" => 3, "&&" => 4, "==" or "!=" => 5, "<" or ">" or "<=" or ">=" => 6, "+" or "-" => 7, "*" or "/" or "%" => 8, _ => 0 };
 
     private ExpressionSyntax ParseExpression(int parent = 0)
     {
         ExpressionSyntax left;
-        if (Current.Text is "!" or "-" or "+")
+        if (Current.Text is "++" or "--")
+        {
+            var op = Next(); left = new UpdateSyntax(op.Text, ParseExpression(9), false, op.Location);
+        }
+        else if (Current.Text is "!" or "-" or "+")
         {
             var op = Next();
             left = new UnarySyntax(op.Text, ParseExpression(9), op.Location);
@@ -301,6 +305,10 @@ public sealed class Parser
                 left = new CallSyntax(left, arguments.ToImmutable(), left.Location);
                 continue;
             }
+            if (Current.Text is "++" or "--")
+            {
+                var update = Next(); left = new UpdateSyntax(update.Text, left, true, update.Location); continue;
+            }
             if (Current.Text == "?" && parent < 2)
             {
                 var question = Next(); var whenTrue = ParseExpression(); Expect(":");
@@ -310,7 +318,7 @@ public sealed class Parser
             var precedence = Precedence(Current.Text);
             if (precedence == 0 || precedence <= parent) break;
             var op = Next();
-            left = new BinarySyntax(left, op.Text, ParseExpression(op.Text == "=" ? precedence - 1 : precedence), op.Location);
+            left = new BinarySyntax(left, op.Text, ParseExpression(precedence == 1 ? precedence - 1 : precedence), op.Location);
         }
         return left;
     }

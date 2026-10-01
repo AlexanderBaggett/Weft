@@ -10,7 +10,7 @@ cross-cutting language, message runtime, and production adapters remain required
 The original examples are design sketches; `examples/foundation` and `examples/functions`
 are executable. Phase 2 now supports static helper methods, overloads, named/optional
 arguments, visibility checks, int32-to-int64 widening, for/do loops, break/continue, and
-conditional expressions on both backends; see the
+conditional expressions, and update/compound-assignment operators on both backends; see the
 [Phase 2 evidence](phases/02-language-and-message-runtime/tasks.md).
 See [foundation progress](phases/01-design-and-compiler-foundation/tasks.md),
 [acceptance cases](acceptance/README.md), and [shared contracts](contracts/ir-and-runtime.md).

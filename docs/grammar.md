@@ -328,19 +328,21 @@ for-initializer = ( "var" ident "=" expression )
                 | ( type ident "=" expression { "," ident "=" expression } )
                 | statement-expressions ;
 statement-expressions = statement-expression { "," statement-expression } ;
-statement-expression = assignment-expression | call-expression ;
+statement-expression = assignment-expression | call-expression | update-expression ;
+update-expression = ( "++" | "--" ) expression | expression ( "++" | "--" ) ;
 expression      = literal | qualified-ident | "(" expression ")"
-                | ( "!" | "-" | "+" ) expression
+                | ( "!" | "-" | "+" ) expression | update-expression
                 | expression binary-op expression
                 | expression "?" expression ":" expression
                 | expression "(" [ argument { "," argument } ] ")" ;
-binary-op       = "=" | "||" | "&&" | "==" | "!=" | "<" | ">" | "<=" | ">="
+binary-op       = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "||" | "&&" | "==" | "!=" | "<" | ">" | "<=" | ">="
                 | "+" | "-" | "*" | "/" | "%" ;
 ```
 
-Precedence from lowest to highest is assignment (right associative), conditional (right
+Precedence from lowest to highest is simple/compound assignment (right associative), conditional (right
 associative), OR, AND, equality,
-comparison, addition/subtraction, multiplication/division/remainder, unary, member/call.
+comparison, addition/subtraction, multiplication/division/remainder, unary/prefix update,
+member/call/postfix update.
 Currently executable types are void (return only), bool, int32/int, int64/long, string.
 Numeric literals are decimal signed integer magnitudes with optional L suffix and
 underscores; minimum signed values are accepted through unary negation. The parser

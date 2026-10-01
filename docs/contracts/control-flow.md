@@ -8,7 +8,7 @@ cleanup, collection iteration, and remaining expression forms stay in P02-002/00
 ## Loops and scopes
 
 ```csharp
-for (var i = 0; i < 5; i = i + 1)
+for (var i = 0; i < 5; i++)
 {
     if (i == 1) continue;
     if (i == 4) break;
@@ -20,7 +20,7 @@ The initializer runs once. Before each iteration the condition is tested. After 
 body finishes or executes `continue`, iterators run left to right, then the condition
 is tested again. `break` exits without evaluating the iterators or condition again.
 An omitted condition is true. Initializer and iterator expression lists may contain
-calls and assignments. Typed initializers may declare multiple initialized variables;
+calls, assignments, and increment/decrement operations. Typed initializers may declare multiple initialized variables;
 `var` declares one variable. A loop's initializer locals are visible to its condition,
 body, and iterators, but not after the loop. Body locals do not leak into its header.
 
@@ -31,9 +31,37 @@ used as a branch or loop body requires braces (WF2017), matching C# embedded sta
 Empty statements allow `while (Test()) ;` and `for (...) ;`.
 
 See the [C# statement specification](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/statements#139-iteration-statements)
-for iteration order and declaration scopes. Increment/decrement, compound assignment,
-uninitialized declarations, and `foreach` remain tracked ordinary-language work;
-use `i = i + 1` in current executable programs.
+for iteration order and declaration scopes. Uninitialized declarations and `foreach`
+remain tracked ordinary-language work.
+
+## Updates and compound assignments
+
+Prefix/postfix `++` and `--` operate on int32/int64 locals and parameters. Prefix returns
+the updated value; postfix returns the previous value. Both use the current unchecked
+integer behavior, including wraparound at the signed limits. They can appear in
+expressions, statements, and loop headers. Invalid targets are WF2005; unsupported
+operand types are WF2003. Optional defaults cannot contain updates.
+
+`+=`, `-=`, `*=`, `/=`, and `%=` read the old value before evaluating the right-hand
+side, assign the result once, and produce that assigned value. For example, with
+`x = 10`, `x += (x = 3)` produces and stores 13. Compound assignments associate right
+to left. Integer operations share the ordinary binary-operator and conversion checks;
+long variables accept int values, while int variables cannot silently narrow a long
+result. Division and remainder use the portable runtime helpers, preserving the
+existing minimum-value and zero-divisor behavior. String `+=` uses the same formatting
+and concatenation as ordinary string `+`.
+
+The [C# compound-assignment specification](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/expressions#12224-compound-assignment)
+defines the evaluation order and conversion constraints. Current targets are locals
+and parameters. Updates to fields, properties, and indexed elements join their
+respective object/collection implementations; remaining numeric widths and checked
+arithmetic remain P02-008. Bitwise/shift/coalescing assignments remain ordinary-expression
+work. No host-language permissive narrowing can change accepted Weft source.
+
+[UpdateOperatorTests.cs](../../tests/Weft.Tests/UpdateOperatorTests.cs) checks invalid
+targets/types/defaults and malformed IR. Conformance programs `increment-evaluation`,
+`compound-assignment-order`, and `updates-in-control-flow` verify results and side
+effects independently on both runtimes.
 
 ## Conditional expressions
 

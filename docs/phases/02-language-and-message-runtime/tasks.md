@@ -94,7 +94,7 @@ Verification on .NET SDK 10.0.111 and OpenJDK 26.0.2, emitting Java release 21:
 
 ### Control-flow checkpoint — 2026-09-30
 
-Worktree based on `5c37877`, covering portions of P02-002/011/032. Both backends now
+Committed as `e567947`, covering portions of P02-002/011/032. Both backends now
 execute for/do loops, break/continue, empty statements, and conditional expressions.
 Loop locals, ordered initializer/iterator calls, nearest-loop exits, conditional
 int-to-long widening, and conditional optional defaults share frontend checks.
@@ -115,6 +115,30 @@ remaining constant-reachability work.
 P02-002 remains open for matching, remaining expression forms, constant reachability,
 and integration with collection iteration and cleanup. No parent task is marked
 complete by this checkpoint; the full release scope is unchanged.
+
+### Update-operator checkpoint — 2026-09-30
+
+Worktree based on `e567947`, covering further portions of P02-002/008/011/032.
+Prefix/postfix increment/decrement and arithmetic compound assignments now execute
+on both backends for current local/parameter types. Shared binary binding preserves
+conversion checks and uses existing runtime division/remainder contracts. Old-value
+reads precede right-hand effects; prefix/postfix return values and unchecked integer
+limits are explicit. String `+=` shares ordinary string concatenation.
+
+- `dotnet test Weft.slnx --no-restore`: **148 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Three new executable conformance programs cover source evaluation order, chained
+  assignments, signed limits, named calls, short-circuiting, conditionals, and loop
+  headers. Twelve frontend/IR checks cover invalid targets, types, defaults, and IR.
+  There are now 28 conformance cases.
+- Independent agent review completed with no actionable regressions. Extra CLI
+  checks passed on both runtimes for chained assignments, prefix/postfix precedence,
+  reordered named arguments, nested string updates, and signed-limit wrapping.
+- `git diff --check` passes. Hosted CI remains deferred.
+
+Object/indexer targets, the full numeric set, checked operations, matching, and
+remaining expression forms remain within their original Phase 2 tasks. The user's
+current milestone workflow is independent review followed by a local commit.
 
 **Next:** continue P02-001/003 with ordinary classes/models/records, construction and
 field/property access, using these method symbols and call rules. Extend instance

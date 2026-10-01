@@ -3,7 +3,7 @@
 Weft's first release still includes the full language on .NET and JVM. The current
 compiler includes the Phase 1 foundation and the first Phase 2 function work: ordinary
 functions, static helper classes, overloads, named/optional arguments, loops with
-break/continue, conditional expressions, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
+break/continue, conditional expressions, update/compound-assignment operators, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
 syntax representation and explicit not-yet-implemented diagnostics. They remain
 required work in the [phase trackers](phases/README.md).
 
