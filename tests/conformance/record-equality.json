@@ -1,0 +1,7 @@
+{
+  "id": "record-equality",
+  "sources": {
+    "main.weft": "class Box { public int N; }\nmodel Identity { int N; }\nrecord Name(string Text);\nrecord Envelope {\n private int code;\n public Name Name { get; init; }\n public Box Box { get; init; }\n public Identity Id { get; init; }\n public int Computed { get { Print(\"unexpected getter\"); return code; } }\n public Envelope(Name name, Box box, Identity id, int value) { Name = name; Box = box; Id = id; code = value; }\n}\nvoid Main() {\n var box = new Box { N = 2 }; var id = new Identity { N = 3 };\n var a = new Envelope(new Name(\"A\" + \"da\"), box, id, 1);\n var b = new Envelope(new Name(\"Ada\"), box, id, 1);\n Print(a == b); Print(a.Equals(b)); Print(a.GetHashCode() == b.GetHashCode());\n Print(a == new Envelope(new Name(\"Ada\"), box, id, 2));\n Print(a == new Envelope(new Name(\"Ada\"), new Box { N = 2 }, id, 1));\n Print(a == new Envelope(new Name(\"Ada\"), box, new Identity { N = 3 }, 1));\n var copied = a with {}; Print(copied == a); box.N++; Print(copied.Box.N);\n}\n"
+  },
+  "stdout": "true\ntrue\ntrue\nfalse\nfalse\nfalse\ntrue\n3\n"
+}

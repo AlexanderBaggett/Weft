@@ -23,7 +23,10 @@ public sealed partial class Binder
                 foreach (var modifier in type.Modifiers.Where(m => m is not ("public" or "internal" or "private" or "static")))
                     diagnostics.Error("WF2012", $"Modifier '{modifier}' is invalid on a class.", type.Location);
                 var name = Qualify(ns, type.Name);
-                if (!types.TryAdd(name, new(name, type.Location, visibility, type.Modifiers.Contains("static"))) || namespaces.Contains(name))
+                if (type.Kind != ConstructKind.Class && type.Modifiers.Contains("static"))
+                    diagnostics.Error("WF2012", "Models and records cannot be static.", type.Location);
+                var dataKind = type.Kind switch { ConstructKind.Model => DataKind.Model, ConstructKind.Record => DataKind.Record, _ => DataKind.Class };
+                if (!types.TryAdd(name, new(name, type.Location, visibility, type.Modifiers.Contains("static"), dataKind)) || namespaces.Contains(name))
                     diagnostics.Error("WF2002", $"Duplicate declaration '{name}'.", type.Location);
                 fields.TryAdd(name, []); properties.TryAdd(name, []);
             }
@@ -46,8 +49,10 @@ public sealed partial class Binder
             {
                 if (owner is not null) { diagnostics.Error("WF2009", "Nested types remain required declaration work.", type.Location); continue; }
                 var typeName = Qualify(ns, type.Name);
-                Declare(type.Members, ns, typeName);
-                if (!types[typeName].IsStatic && !type.Members.OfType<FunctionSyntax>().Any(f => f.IsConstructor))
+                var members = ExpandDataMembers(type);
+                Declare(members, ns, typeName);
+                if (!types[typeName].IsStatic && !members.OfType<FunctionSyntax>().Any(f => f.IsConstructor &&
+                    !(types[typeName].Kind == DataKind.Record && IsRecordCopyConstructor(f, Nominal(typeName)))))
                 {
                     var constructor = new FunctionSyntax(type.Name, new("void", [], 0, false, type.Location), [],
                         new([], type.Location), ["public"], type.Location, true);
@@ -57,12 +62,16 @@ public sealed partial class Binder
             }
             if (declaration is FieldSyntax field && owner is not null)
             {
-                var visibility = DeclarationVisibility(field.Modifiers, Visibility.Private, true, field.Location);
+                var visibility = DeclarationVisibility(field.Modifiers, types[owner].Kind == DataKind.Model ? Visibility.Public : Visibility.Private, true, field.Location);
                 foreach (var modifier in field.Modifiers.Where(m => m is not ("public" or "internal" or "private" or "readonly" or "required")))
                     diagnostics.Error("WF2009", $"Field modifier '{modifier}' requires a later declaration pass.", field.Location);
                 if (types[owner].IsStatic) diagnostics.Error("WF2012", "An instance field cannot belong to a static class.", field.Location);
                 if (fields[owner].Any(f => f.Symbol.Name == field.Name)) diagnostics.Error("WF2002", $"Duplicate field '{field.Name}'.", field.Location);
-                fields[owner].Add((new(nextSymbol++, field.Name, Nominal(owner), ResolveType(field.Type, false), field.Location, visibility, field.Modifiers.Contains("readonly"), field.Modifiers.Contains("required")), field.Initializer));
+                var fieldType = ResolveType(field.Type, false);
+                var implicitRequired = types[owner].Kind == DataKind.Model && field.Initializer is null &&
+                    fieldType.Kind is TypeKind.String or TypeKind.Nominal && !field.Modifiers.Contains("readonly");
+                fields[owner].Add((new(nextSymbol++, field.Name, Nominal(owner), fieldType, field.Location, visibility,
+                    field.Modifiers.Contains("readonly"), field.Modifiers.Contains("required") || implicitRequired), field.Initializer));
                 continue;
             }
             if (declaration is ConstructSyntax construct)
@@ -102,8 +111,13 @@ public sealed partial class Binder
             var instance = owner is not null && !types[owner].IsStatic && !function.Modifiers.Contains("static");
             var receiver = instance ? new VariableSymbol(nextSymbol++, "this", Nominal(owner!), function.Location) : null;
             var returned = function.IsConstructor ? Nominal(owner!) : ResolveType(function.ReturnType, true);
+            var copyConstructor = owner is not null && types[owner].Kind == DataKind.Record && IsRecordCopyConstructor(function, Nominal(owner));
+            if (copyConstructor && (function.Initializer?.Kind == "this" || parameters[0].Default is not null))
+                diagnostics.Error("WF2031", "A record copy constructor cannot delegate through this(...) or have an optional source parameter.", function.Location);
+            if (function.IsPrimaryConstructor && parameters.Count == 1 && parameters[0].Type == Nominal(owner!))
+                diagnostics.Error("WF2031", "A positional constructor cannot have the signature reserved for a record copy constructor.", function.Location);
             var symbol = new FunctionSymbol(nextSymbol++, Qualify(owner ?? ns, function.IsConstructor ? ".ctor" : function.Name), returned,
-                parameters.ToImmutable(), function.Location, visibilityFunction, owner, receiver, function.IsConstructor, function.IsInitAccessor);
+                parameters.ToImmutable(), function.Location, visibilityFunction, owner, receiver, function.IsConstructor, function.IsInitAccessor, copyConstructor);
             if (!functions.TryGetValue(symbol.Name, out var overloads)) functions.Add(symbol.Name, overloads = []);
             var duplicate = overloads.FirstOrDefault(other => other.Parameters.Select(p => p.Type).SequenceEqual(symbol.Parameters.Select(p => p.Type)));
             if (duplicate is not null || types.ContainsKey(symbol.Name) || namespaces.Contains(symbol.Name))

@@ -32,6 +32,26 @@ public sealed class DotNetEmitter
         {
             writer.WriteLine($"private sealed class {ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name))} {{", new(type.Symbol.Location));
             foreach (var field in type.Fields) writer.WriteLine($"public {Type(field.Type)} m_{field.Id};", new(field.Location));
+            var name = ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name));
+            if (type.Symbol.Kind is DataKind.Record or DataKind.Model)
+            {
+                writer.WriteLine($"public {name} weftCopy() {{");
+                if (type.CopyConstructor is { } copyConstructor) writer.WriteLine($"return f_{copyConstructor.Id}(this); }}");
+                else
+                {
+                    writer.WriteLine($"{name} copy = new {name}();");
+                    foreach (var field in type.Fields) writer.WriteLine($"copy.m_{field.Id} = this.m_{field.Id};");
+                    writer.WriteLine("return copy; }");
+                }
+            }
+            if (type.Symbol.Kind == DataKind.Record)
+            {
+                writer.WriteLine("public override bool Equals(object obj) {");
+                writer.WriteLine($"return System.Object.ReferenceEquals(this, obj) || obj is {name} other" + string.Concat(type.Fields.Select(f => $" && System.Collections.Generic.EqualityComparer<{Type(f.Type)}>.Default.Equals(m_{f.Id}, other.m_{f.Id})")) + "; }");
+                writer.WriteLine("public override int GetHashCode() { var hash = new System.HashCode();");
+                foreach (var field in type.Fields) writer.WriteLine($"hash.Add(m_{field.Id});");
+                writer.WriteLine("return hash.ToHashCode(); }");
+            }
             writer.WriteLine("}");
         }
         foreach (var (ignored, result) in ObjectEmission.Sequences(module))
@@ -134,6 +154,8 @@ public sealed class DotNetEmitter
         IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
         IrUpdate update => $"unchecked({Update(update)})",
         IrSetterCall setter => $"p_{setter.Setter.Id}({Expression(setter.Receiver)}, {Expression(setter.Value)})",
+        IrCopy copy => $"({Expression(copy.Receiver)}).weftCopy()",
+        IrObjectHash hash => $"({Expression(hash.Receiver)}).GetHashCode()",
         IrAllocate allocated => $"new {Type(allocated.Type)}()",
         IrFieldRead read => $"({Expression(read.Receiver)}).m_{read.Field.Id}",
         IrFieldWrite write => $"(({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)})",
@@ -143,6 +165,7 @@ public sealed class DotNetEmitter
         IrConvert convert => $"((long)({Expression(convert.Operand)}))",
         IrAssign assign => $"(v_{assign.Symbol.Id} = {Expression(assign.Value)})",
         IrUnary unary => $"unchecked({unary.Operator}({Expression(unary.Operand)}))",
+        IrBinary binary when binary.Left.Type.Kind == TypeKind.Nominal && binary.Operator is "==" or "!=" => $"({(binary.Operator == "!=" ? "!" : "")}System.Object.Equals({Expression(binary.Left)}, {Expression(binary.Right)}))",
         IrBinary binary when binary.Operator is "/" or "%" => $"Weft.Runtime.RuntimeContract.{(binary.Operator == "/" ? "Divide" : "Remainder")}({Expression(binary.Left)}, {Expression(binary.Right)})",
         IrBinary binary => $"unchecked({Expression(binary.Left)} {binary.Operator} {Expression(binary.Right)})",
         IrCall call => $"{CallAdapters.Name(call)}({string.Join(", ", ObjectEmission.Arguments(call).Select(Expression))})",

@@ -71,8 +71,8 @@ observable traces and results on each backend.
 
 Ordinary classes, fields, constructors, and instance methods are now executable; see
 the [object contract](objects.md) for reference semantics, initialization, and receiver
-evaluation. [Property accessors](properties.md) use these method rules. Models/records,
-generic methods, imports, separate-project
+evaluation. [Property accessors](properties.md) and [models/records](data-types.md) use these method rules.
+Generic methods, imports, separate-project
 references, and complete numeric/nullable conversions remain
 required work in P02-001/003/004/006/008 and Phase 6. P02-001 remains open until its
 remaining declaration and public-contract work is complete.

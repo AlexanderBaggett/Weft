@@ -1,0 +1,7 @@
+{
+  "id": "record-copy-constructor",
+  "sources": {
+    "main.weft": "record R(string Name, int X) {\n public int Extra = Trace();\n private R(R original) { Print(\"copy\"); Name = original.Name; X = original.X + 1; Extra = 8; }\n static int Trace() { Print(\"initial\"); return 3; }\n}\nrecord Required {\n public required string Name;\n public int Number;\n public Required(Required source) { Print(\"required-copy\"); Name = source.Name; Number = source.Number + 1; }\n}\nint Change() { Print(\"rhs\"); return 10; }\nvoid Main() {\n var r = new R(\"Ada\", 1); var c = r with { Extra = Change() };\n Print(r.X + \":\" + r.Extra); Print(c.Name + \":\" + c.X + \":\" + c.Extra);\n var a = new Required { Name = \"Grace\", Number = 2 }; var b = a with {};\n Print(b.Name + \":\" + b.Number); Print(a.Number);\n}\n"
+  },
+  "stdout": "initial\ncopy\nrhs\n1:3\nAda:2:10\nrequired-copy\nGrace:3\n2\n"
+}

@@ -1,0 +1,7 @@
+{
+  "id": "record-copy-order",
+  "sources": {
+    "main.weft": "class Box { public int N; }\nrecord Value {\n public required string Name { get; set; }\n public int Stored;\n public Box Box { get; init; } = MakeBox();\n public int Number { get => Stored; init { Print(\"set:\" + value); Stored = value + 1; } }\n public Value() { Print(\"constructor\"); }\n static Box MakeBox() { Print(\"field\"); return new Box { N = 1 }; }\n}\nValue Source(Value value) { Print(\"receiver\"); return value; }\nint Change(Value value) { Print(\"rhs\"); value.Stored = 40; return 7; }\nvoid Main() {\n var original = new Value { Name = \"Ada\", Stored = 2 };\n var copy = Source(original) with { Number = Change(original), Name = \"Grace\" };\n Print(original.Name + \":\" + original.Stored); Print(copy.Name + \":\" + copy.Stored);\n copy.Box.N = 9; Print(original.Box.N);\n var second = original with { Name = (original.Name = \"Updated\") };\n Print(second.Stored); Print(second.Name); Print(copy.Name);\n}\n"
+  },
+  "stdout": "field\nconstructor\nreceiver\nrhs\nset:7\nAda:40\nGrace:8\n9\n40\nUpdated\nGrace\n"
+}

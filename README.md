@@ -87,6 +87,7 @@ switches qualify.
 | [classes and construction](docs/contracts/objects.md) | Executable fields, constructors, instance methods, aliasing, and initialization checks |
 | [properties](docs/contracts/properties.md) | Auto-properties, accessors, visibility, constructor initialization, and update evaluation |
 | [object initialization](docs/contracts/initialization.md) | Object/nested initializers, init accessors, required members, and non-null safety |
+| [models and records](docs/contracts/data-types.md) | Data declarations, positional constructors, equality/hash, and shallow copies |
 | [constructor chaining](docs/contracts/constructors.md) | Delegation, one-time initialization, constructor order, and cycle checks |
 | [ordinary control flow](docs/contracts/control-flow.md) | Loop execution, break/continue, conditional expressions, and shared return checks |
 | [sharing middleware](docs/contracts/project-pipelines.md) | Explicit node connections and pipeline adoption across projects and DLL/jar boundaries |
@@ -113,6 +114,6 @@ switches qualify.
 Runnable examples: [foundation](examples/foundation/main.weft),
 [functions](examples/functions/Program.weft), [classes](examples/classes/Program.weft),
 [properties](examples/properties/Program.weft), [initializers](examples/initializers/Program.weft),
-and [constructors](examples/constructors/Program.weft).
+[constructors](examples/constructors/Program.weft), and [models/records](examples/data/Program.weft).
 Full-language design sketches: [examples/orders.weft](examples/orders.weft),
 [examples/input.rules](examples/input.rules), [examples/switches.weft](examples/switches.weft).

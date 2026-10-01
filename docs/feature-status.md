@@ -9,10 +9,11 @@ W032–W034 have executable foundation portions; no complete feature is claimed.
 cross-cutting language, message runtime, and production adapters remain required work.
 The original examples are design sketches; `examples/foundation`, `examples/functions`,
 `examples/classes`, `examples/properties`, `examples/initializers`, and
-`examples/constructors` are executable. Phase 2 now supports
+`examples/constructors`, and `examples/data` are executable. Phase 2 now supports
 static helper methods, overloads, named/optional arguments, ordinary classes with constructors/fields/instance methods, instance
 properties with accessors and auto-property initialization, object/nested initializers,
-required members and init-only writes, constructor delegation and cycle checks, reference
+required members and init-only writes, ordinary models, body/positional records,
+value equality/hash, shallow copies and custom record copy constructors, constructor delegation and cycle checks, reference
 initialization and visibility checks, int32-to-int64 widening, for/do loops,
 break/continue, conditional expressions, and update/compound-assignment operators
 on both backends; see the

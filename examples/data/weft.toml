@@ -1,0 +1,7 @@
+[project]
+name = "data"
+entry = "Demo.Program.Main"
+sources = ["*.weft"]
+
+[build]
+backend = "dotnet"

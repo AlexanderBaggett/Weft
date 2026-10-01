@@ -1,0 +1,7 @@
+{
+  "id": "record-positional",
+  "sources": {
+    "main.weft": "public record Line(string Name, long Price = 25L, int Quantity = 1) {\n public long Total => Price * Quantity;\n public Line() : this(\"default\") {}\n}\nstring Name() { Print(\"name\"); return \"Ada\"; }\nint Count() { Print(\"count\"); return 3; }\nvoid Main() {\n var a = new Line(Quantity: Count(), Name: Name());\n var b = new Line(\"Ada\", 25L, 3);\n Print(a.Total); Print(a == b); Print(a.Equals(b)); Print(a.GetHashCode() == b.GetHashCode());\n var c = a with { Quantity = 4 }; Print(c.Total); Print(a.Quantity); Print(c != a);\n Print(new Line().Name);\n}\n"
+  },
+  "stdout": "count\nname\n75\ntrue\ntrue\ntrue\n100\n3\ntrue\ndefault\n"
+}

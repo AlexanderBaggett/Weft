@@ -5,7 +5,7 @@ using Weft.Compiler.Text;
 namespace Weft.Compiler.IR;
 
 public sealed record IrModule(string Name, ImmutableArray<IrFunction> Functions, ImmutableArray<IntrinsicSignature> RequiredIntrinsics, string RuntimeAbi, ImmutableArray<IrClass> Classes = default);
-public sealed record IrClass(TypeSymbol Symbol, ImmutableArray<FieldSymbol> Fields);
+public sealed record IrClass(TypeSymbol Symbol, ImmutableArray<FieldSymbol> Fields, FunctionSymbol? CopyConstructor = null);
 public sealed record IrFunction(FunctionSymbol Symbol, IrBlock Body, SourceOrigin Origin);
 public abstract record IrNode(SourceOrigin Origin);
 public abstract record IrStatement(SourceOrigin Origin) : IrNode(Origin);
@@ -34,6 +34,8 @@ public sealed record IrCall(FunctionSymbol Function, ImmutableArray<IrExpression
 // Invoke a void setter exactly once and return the supplied value, not its stored result.
 public sealed record IrSetterCall(FunctionSymbol Setter, IrExpression Receiver, IrExpression Value, SourceOrigin Origin)
     : IrExpression(Value.Type, Origin);
+public sealed record IrCopy(IrExpression Receiver, SourceOrigin Origin) : IrExpression(Receiver.Type, Origin);
+public sealed record IrObjectHash(IrExpression Receiver, SourceOrigin Origin) : IrExpression(WeftType.Int32, Origin);
 public sealed record IrAllocate(WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrFieldRead(FieldSymbol Field, IrExpression Receiver, SourceOrigin Origin) : IrExpression(Field.Type, Origin);
 public sealed record IrFieldWrite(FieldSymbol Field, IrExpression Receiver, IrExpression Value, SourceOrigin Origin) : IrExpression(Field.Type, Origin);

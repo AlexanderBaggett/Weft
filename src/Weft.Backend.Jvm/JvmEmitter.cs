@@ -25,6 +25,26 @@ public sealed partial class JvmEmitter
         {
             writer.WriteLine($"private static final class {ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name))} {{", new(type.Symbol.Location));
             foreach (var field in type.Fields) writer.WriteLine($"public {Type(field.Type)} m_{field.Id};", new(field.Location));
+            var name = ObjectEmission.TypeName(new(TypeKind.Nominal, type.Symbol.Name));
+            if (type.Symbol.Kind is DataKind.Record or DataKind.Model)
+            {
+                writer.WriteLine($"public {name} weftCopy() {{");
+                if (type.CopyConstructor is { } copyConstructor) writer.WriteLine($"return f_{copyConstructor.Id}(this); }}");
+                else
+                {
+                    writer.WriteLine($"{name} copy = new {name}();");
+                    foreach (var field in type.Fields) writer.WriteLine($"copy.m_{field.Id} = this.m_{field.Id};");
+                    writer.WriteLine("return copy; }");
+                }
+            }
+            if (type.Symbol.Kind == DataKind.Record)
+            {
+                writer.WriteLine("@Override public boolean equals(Object obj) {");
+                writer.WriteLine($"return this == obj || obj instanceof {name} other" + string.Concat(type.Fields.Select(f => $" && java.util.Objects.equals(m_{f.Id}, other.m_{f.Id})")) + "; }");
+                writer.WriteLine("@Override public int hashCode() { int hash = 1;");
+                foreach (var field in type.Fields) writer.WriteLine($"hash = 31 * hash + java.util.Objects.hashCode(m_{field.Id});");
+                writer.WriteLine("return hash; }");
+            }
             writer.WriteLine("}");
         }
         foreach (var (ignored, result) in ObjectEmission.Sequences(module))
@@ -134,6 +154,8 @@ public sealed partial class JvmEmitter
         IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
         IrUpdate update => $"({Update(update)})",
         IrSetterCall setter => $"p_{setter.Setter.Id}({Expression(setter.Receiver)}, {Expression(setter.Value)})",
+        IrCopy copy => $"({Expression(copy.Receiver)}).weftCopy()",
+        IrObjectHash hash => $"({Expression(hash.Receiver)}).hashCode()",
         IrAllocate allocated => $"new {Type(allocated.Type)}()",
         IrFieldRead read => $"({Expression(read.Receiver)}).m_{read.Field.Id}",
         IrFieldWrite write => $"(({Expression(write.Receiver)}).m_{write.Field.Id} = {Expression(write.Value)})",
@@ -144,6 +166,7 @@ public sealed partial class JvmEmitter
         IrAssign assign => $"(v_{assign.Symbol.Id} = {Expression(assign.Value)})",
         IrUnary unary => $"({unary.Operator}({Expression(unary.Operand)}))",
         IrBinary binary when binary.Left.Type == WeftType.String && binary.Operator is "==" or "!=" => $"({(binary.Operator == "!=" ? "!" : "")}({Expression(binary.Left)}).equals({Expression(binary.Right)}))",
+        IrBinary binary when binary.Left.Type.Kind == TypeKind.Nominal && binary.Operator is "==" or "!=" => $"({(binary.Operator == "!=" ? "!" : "")}java.util.Objects.equals({Expression(binary.Left)}, {Expression(binary.Right)}))",
         IrBinary binary when binary.Operator is "/" or "%" => $"weft.runtime.RuntimeContract.{(binary.Operator == "/" ? "divide" : "remainder")}({Expression(binary.Left)}, {Expression(binary.Right)})",
         IrBinary binary => $"({Expression(binary.Left)} {binary.Operator} {Expression(binary.Right)})",
         IrCall call => $"{CallAdapters.Name(call)}({string.Join(", ", ObjectEmission.Arguments(call).Select(Expression))})",

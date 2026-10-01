@@ -300,7 +300,7 @@ Contextual where possible (`from`, `on`, `after`, `mode`) to keep C# code portab
 
 ## Current executable grammar
 
-The parser gives ordinary functions, classes, fields, constructors, and methods typed
+The parser gives ordinary functions, classes/models/records, fields, constructors, and methods typed
 syntax nodes, including property accessors and initializers. Other declared
 construct kinds retain their header and balanced token-group body plus the complete
 source text. Contextual keywords remain identifier tokens; declaration and block
@@ -308,8 +308,11 @@ contexts decide their meaning. The binder emits WF2009 for unimplemented semanti
 passes, so balanced sketches never appear to have passed policy checking.
 
 ```ebnf
-foundation-unit = { namespace-decl | foundation-function | foundation-class | structural-declaration } ;
-foundation-class = { modifier } "class" ident "{" { foundation-function | foundation-field | foundation-property | constructor } "}" ;
+foundation-unit = { namespace-decl | foundation-function | foundation-class | foundation-record | structural-declaration } ;
+foundation-class = { modifier } ( "class" | "model" ) ident foundation-type-body ;
+foundation-record = { visibility } "record" [ "class" ] ident [ "(" [ parameter { "," parameter } ] ")" ]
+                    ( ";" | foundation-type-body [ ";" ] ) ;
+foundation-type-body = "{" { foundation-function | foundation-field | foundation-property | constructor } "}" ;
 foundation-field = { modifier } type ident [ "=" expression ] ";" ;
 foundation-property = { visibility | "required" } type ident
                       ( "=>" expression ";" | "{" accessor { accessor } "}" [ "=" expression ";" ] ) ;
@@ -342,7 +345,8 @@ new-expression  = "new" type ( "(" [ argument { "," argument } ] ")" [ object-in
 object-initializer = "{" [ member-initializer { "," member-initializer } [ "," ] ] "}" ;
 member-initializer = ident "=" ( expression | object-initializer ) ;
 update-expression = ( "++" | "--" ) expression | expression ( "++" | "--" ) ;
-expression      = literal | qualified-ident | "this" | new-expression | "(" expression ")"
+with-expression = expression "with" "{" [ ident "=" expression { "," ident "=" expression } [ "," ] ] "}" ;
+expression      = literal | qualified-ident | "this" | new-expression | with-expression | "(" expression ")"
                 | expression "." ident
                 | ( "!" | "-" | "+" ) expression | update-expression
                 | expression binary-op expression
@@ -354,10 +358,11 @@ binary-op       = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "||" | "&&" | "==" | 
 
 Precedence from lowest to highest is simple/compound assignment (right associative), conditional (right
 associative), OR, AND, equality,
-comparison, addition/subtraction, multiplication/division/remainder, unary/prefix update,
+comparison, addition/subtraction, multiplication/division/remainder, with, unary/prefix update,
 member/call/postfix update.
 Currently executable types are void (return only), bool, int32/int, int64/long, string,
-and ordinary class references.
+and ordinary class/model/record references. See [models and records](contracts/data-types.md)
+for positional initialization, equality, and copying.
 Numeric literals are decimal signed integer magnitudes with optional L suffix and
 underscores; minimum signed values are accepted through unary negation. The parser
 also represents generic/array/nullable type syntax; those forms and interpolation

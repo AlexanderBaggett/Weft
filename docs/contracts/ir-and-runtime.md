@@ -7,7 +7,9 @@ functions, block scopes, initialized locals, assignments, returns, branches, loo
 typed constants/reads/operators/calls, prefix/postfix updates, explicit int32-to-int64
 conversions, and versioned intrinsic calls. Class declarations, construction, fields,
 and method receivers are also explicit. Executable types are void, bool, int32, int64,
-string, and ordinary nominal class references. The type model also names the future
+string, and nominal class/model/record references. Type symbols retain data kind;
+[record equality/hash and copying](data-types.md) have shared metadata and validated
+copy/initialization identities. The type model also names the future
 array, nullable, generic, signed/unsigned integer widths, char, float32/float64,
 decimal, and decimal128 forms. These numeric identities follow the
 [numeric contract](numeric-types.md); adding a type identity is not its implementation.
@@ -52,7 +54,7 @@ sequences. Property metadata remains available in binding results; auto-properti
 use compiler-owned fields with ordinary initialization rules. See [properties](properties.md).
 
 Object initializers use `IrSequence.Initializing` to identify the first binding's
-fresh constructor result. Constructors must start by allocating their receiver or
+fresh constructor or copy result. Constructors must start by allocating their receiver or
 delegating to a constructor of the same class, and return only that receiver. Shared
 constructor-graph checks reject direct/indirect delegation cycles, so each accepted
 chain ends in allocation. See [constructor chaining](constructors.md). The sequence yields that same object after ordered member

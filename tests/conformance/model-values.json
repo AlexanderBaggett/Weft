@@ -1,0 +1,7 @@
+{
+  "id": "model-values",
+  "sources": {
+    "main.weft": "model Customer { string Name; int Orders; }\nvoid Main() {\n var a = new Customer { Name = \"Ada\", Orders = 2 }; var alias = a;\n var b = new Customer { Name = \"Ada\", Orders = 2 };\n Print(a == alias); Print(a == b); alias.Orders++;\n var copy = a with { Name = \"Grace\" };\n Print(copy == a); Print(a.Name + \":\" + a.Orders); Print(copy.Name + \":\" + copy.Orders);\n copy.Orders = 8; Print(a.Orders);\n}\n"
+  },
+  "stdout": "true\nfalse\nfalse\nAda:3\nGrace:3\n3\n"
+}

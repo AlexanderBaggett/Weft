@@ -1,0 +1,7 @@
+{
+  "id": "record-primary-initializers",
+  "sources": {
+    "main.weft": "record R(int X, int Y = 2) {\n public int X { get; init; } = Trace(\"X\", X + 1);\n public int Total { get; } = Trace(\"Total\", X + Y);\n public R() : this(3) { Print(\"outer\"); }\n static int Trace(string label, int n) { Print(label + \":\" + n); return n; }\n}\nvoid Main() {\n var r = new R(); Print(r.X); Print(r.Total);\n var c = r with { X = 9 }; Print(c.X); Print(c.Total); Print(r.X);\n}\n"
+  },
+  "stdout": "X:4\nTotal:5\nouter\n4\n5\n9\n5\n4\n"
+}

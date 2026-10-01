@@ -31,6 +31,7 @@ public sealed partial class Binder
         foreach (var tree in inputs) CollectTypes(tree.Declarations, "");
         if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), [], types.Values.ToImmutableArray());
         foreach (var tree in inputs) Declare(tree.Declarations, "");
+        DeclareRecordOperations();
         ValidatePublicContracts(); ValidateRequiredMembers();
         if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray());
         var orderedBodies = OrderConstructorBodies().ToArray();
@@ -41,6 +42,9 @@ public sealed partial class Binder
             currentFunction = symbol;
             currentNamespace = ns;
             scope = new(); initializedFields = []; constructorExits = [];
+            if (syntax.IsPrimaryConstructor)
+                foreach (var parameter in symbol.Parameters)
+                    if (!scope.Declare(parameter)) diagnostics.Error("WF2002", $"Duplicate parameter '{parameter.Name}'.", parameter.Location);
             var prefix = ImmutableArray.CreateBuilder<IrStatement>();
             if (symbol.Receiver is not null)
             {
@@ -57,7 +61,7 @@ public sealed partial class Binder
                     {
                         prefix.Add(new IrVariable(symbol.Receiver, new IrAllocate(symbol.Receiver.Type, origin), origin));
                         bindingFieldInitializer = true;
-                        foreach (var (field, initializer) in fields[symbol.ContainingType!])
+                        foreach (var (field, initializer) in symbol.IsCopyConstructor ? [] : fields[symbol.ContainingType!])
                         {
                             if (initializer is null) continue;
                             var value = ConvertImplicit(BindExpression(initializer), field.Type);
@@ -69,7 +73,8 @@ public sealed partial class Binder
                     scope.Declare(symbol.Receiver);
                 }
             }
-            foreach (var parameter in symbol.Parameters) if (!scope.Declare(parameter)) diagnostics.Error("WF2002", $"Duplicate parameter '{parameter.Name}'.", parameter.Location);
+            if (!syntax.IsPrimaryConstructor)
+                foreach (var parameter in symbol.Parameters) if (!scope.Declare(parameter)) diagnostics.Error("WF2002", $"Duplicate parameter '{parameter.Name}'.", parameter.Location);
             if (syntax.Body is null) { diagnostics.Error("WF2009", $"Function '{symbol.Name}' requires a body in an executable project.", syntax.Location); continue; }
             foreach (var modifier in syntax.Modifiers)
                 if (modifier is "async" or "pure" or "idempotent" or "external") diagnostics.Error("WF2009", $"The '{modifier}' semantic pass is scheduled for Phase 2/4 and is not implemented yet.", syntax.Location);
@@ -89,7 +94,8 @@ public sealed partial class Binder
             if (symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(body)) diagnostics.Error("WF2007", $"Not all paths in '{symbol.Name}' return '{symbol.ReturnType.Name}'.", syntax.Location);
             bound.Add(new(symbol, body, new(syntax.Location)));
         }
-        var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion, types.Values.Where(t => !t.IsStatic).Select(t => new IrClass(t, fields[t.Name].Select(f => f.Symbol).ToImmutableArray())).ToImmutableArray());
+        bound.AddRange(recordOperations);
+        var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion, types.Values.Where(t => !t.IsStatic).Select(t => new IrClass(t, fields[t.Name].Select(f => f.Symbol).ToImmutableArray(), functions.Values.SelectMany(group => group).SingleOrDefault(f => f.IsCopyConstructor && f.ContainingType == t.Name))).ToImmutableArray());
         return new(module, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray(), properties.Values.SelectMany(p => p).ToImmutableArray());
     }
 
@@ -252,6 +258,7 @@ public sealed partial class Binder
                 else diagnostics.Error("WF2009", $"Execution of '{token.Kind}' / '{token.Text}' requires the corresponding Phase 2 semantic pass.", token.Location);
                 return Error(origin);
             case NewSyntax created: return BindNew(created);
+            case WithSyntax copied: return BindWith(copied);
             case MemberSyntax member:
                 return BindMember(member) is { } selected ? ReadTarget(selected) : Error(origin);
             case NameSyntax { Name: "this" }:

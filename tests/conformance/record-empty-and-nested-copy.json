@@ -1,0 +1,7 @@
+{
+  "id": "record-empty-and-nested-copy",
+  "sources": {
+    "main.weft": "record Empty;\nrecord class Point(long X, long Y);\nrecord Pair(Point Left, Point Right);\nvoid Main() {\n var a = new Empty(); var b = a with {}; Print(a == b); Print(a.GetHashCode() == b.GetHashCode());\n var p = new Pair(new Point(1, 2), new Point(3, 4));\n var q = p with { Left = p.Left with { X = 10 } };\n Print(p.Left.X); Print(q.Left.X); Print(p.Right == q.Right); Print(p != q);\n var yes = true; var chosen = yes ? p with {} : q with {}; Print(chosen == p);\n Print((p with {} == p) && (p == p with {}));\n}\n"
+  },
+  "stdout": "true\ntrue\n1\n10\ntrue\ntrue\ntrue\ntrue\n"
+}

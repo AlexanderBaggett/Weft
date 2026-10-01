@@ -1,0 +1,28 @@
+namespace Demo;
+
+model Customer {
+    string Name;
+    int Orders;
+}
+
+record Order(Customer Customer, int Quantity, long UnitPrice = 25L) {
+    public long Total => Quantity * UnitPrice;
+}
+
+static class Program {
+    public static void Main() {
+        var customer = new Customer { Name = "Ada", Orders = 1 };
+        var original = new Order(customer, 2);
+        var revised = original with { Quantity = 3 };
+        var equal = new Order(customer, 3);
+        Print(original.Customer.Name + ":" + original.Total);
+        Print(revised.Customer.Name + ":" + revised.Total);
+        Print(revised == equal);
+        Print(revised.GetHashCode() == equal.GetHashCode());
+        revised.Customer.Orders++;
+        Print(original.Customer.Orders);
+        var renamed = customer with { Name = "Grace" };
+        Print(customer == renamed);
+        Print(renamed.Name + ":" + renamed.Orders);
+    }
+}

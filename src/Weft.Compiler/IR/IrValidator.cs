@@ -17,7 +17,7 @@ public static class IrValidator
         foreach (var type in module.Classes.IsDefault ? [] : module.Classes)
         {
             var origin = new SourceOrigin(type.Symbol.Location);
-            if (type.Symbol.IsStatic || !classes.TryAdd(type.Symbol.Name, type)) Fail("Invalid or duplicate IR class.", origin);
+            if (!Enum.IsDefined(type.Symbol.Kind) || type.Symbol.IsStatic || !classes.TryAdd(type.Symbol.Name, type)) Fail("Invalid or duplicate IR class.", origin);
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
             foreach (var field in type.Fields)
                 if (field.Owner != new WeftType(TypeKind.Nominal, type.Symbol.Name) || !fields.TryAdd(field.Id, field) || !fieldNames.Add(field.Name))
@@ -37,6 +37,11 @@ public static class IrValidator
         foreach (var function in module.Functions)
         {
             currentFunction = function.Symbol;
+            if (currentFunction.IsCopyConstructor && (!currentFunction.IsConstructor || currentFunction.Receiver is null ||
+                currentFunction.Parameters.Length != 1 || currentFunction.Parameters[0].Type != currentFunction.Receiver.Type ||
+                !classes.TryGetValue(currentFunction.ContainingType ?? "", out var copyOwner) ||
+                copyOwner.Symbol.Kind != DataKind.Record || copyOwner.CopyConstructor != currentFunction))
+                Fail("Invalid IR record copy constructor signature or owner.", function.Origin);
             if (currentFunction.IsInitAccessor && (currentFunction.IsConstructor || currentFunction.Receiver is null ||
                 currentFunction.ReturnType != WeftType.Void || currentFunction.Parameters.Length != 1))
                 Fail("Invalid IR init accessor signature.", function.Origin);
@@ -72,6 +77,10 @@ public static class IrValidator
             Statement(function.Body, locals, identities, function.Symbol.ReturnType);
             if (function.Symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(function.Body)) Fail("IR function can fall through without a return value.", function.Origin);
         }
+        foreach (var type in classes.Values)
+            if (type.CopyConstructor is { } copyConstructor && (type.Symbol.Kind != DataKind.Record || !copyConstructor.IsCopyConstructor ||
+                copyConstructor.ContainingType != type.Symbol.Name || !functions.TryGetValue(copyConstructor.Id, out var declaredCopy) || declaredCopy != copyConstructor))
+                Fail("Invalid or unregistered IR copy constructor.", new(type.Symbol.Location));
         ConstructorGraph.Order(functions.Values.Where(f => f.IsConstructor), constructorTargets, cycle =>
             Fail("Circular IR constructor chain: " + string.Join(" -> ", cycle.Select(ConstructorGraph.Signature)) + ".", new(cycle[0].Location)));
         return diagnostics.ToImmutableArray();
@@ -169,6 +178,16 @@ public static class IrValidator
                     if (setter.Setter.ReturnType != WeftType.Void || setter.Setter.Parameters.Length != 1 || setter.Setter.Receiver is null)
                         Fail("Invalid IR setter signature.", setter.Origin);
                     break;
+                case IrCopy copy:
+                    Expression(copy.Receiver, locals);
+                    if (!classes.TryGetValue(copy.Type.Name, out var copiedType) || copiedType.Symbol.Kind is not (DataKind.Record or DataKind.Model))
+                        Fail("IR copy requires a record or model.", copy.Origin);
+                    break;
+                case IrObjectHash hash:
+                    Expression(hash.Receiver, locals);
+                    if (!classes.TryGetValue(hash.Receiver.Type.Name, out var hashedType) || hashedType.Symbol.Kind != DataKind.Record)
+                        Fail("IR record hash requires a record receiver.", hash.Origin);
+                    break;
                 case IrAllocate allocated:
                     if (allocated.Type.Kind != TypeKind.Nominal || currentFunction?.IsConstructor != true || currentFunction.Receiver?.Type != allocated.Type)
                         Fail("Raw IR allocation is restricted to the matching constructor.", allocated.Origin);
@@ -189,9 +208,9 @@ public static class IrValidator
                     var sequenceLocals = new Dictionary<int, VariableSymbol>(locals);
                     var first = sequence.Bindings[0];
                     if (sequence.Initializing is { } instance && (first.Symbol != instance ||
-                        first.Initializer is not IrCall { Function.IsConstructor: true } construction || construction.Type != instance.Type ||
+                        first.Initializer is not (IrCall { Function.IsConstructor: true } or IrCopy) || first.Initializer.Type != instance.Type ||
                         sequence.Value is not IrRead result || result.Symbol != instance))
-                        Fail("IR object initializer must start with construction and yield that same object.", sequence.Origin);
+                        Fail("IR initializer must start with construction/copy and yield that same object.", sequence.Origin);
                     Statement(first, sequenceLocals, functionIdentities, WeftType.Void);
                     var added = sequence.Initializing is { } fresh && initializing.Add(fresh.Id);
                     foreach (var binding in sequence.Bindings.Skip(1)) Statement(binding, sequenceLocals, functionIdentities, WeftType.Void);

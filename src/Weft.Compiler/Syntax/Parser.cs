@@ -68,11 +68,17 @@ public sealed class Parser
             Expect("}");
             return new NamespaceSyntax(name, false, members, location);
         }
-        if (Current.Text == "class" && Peek(2).Text == "{")
+        var recordOffset = Current.Text == "record" && Peek(1).Text == "class" ? 1 : 0;
+        if ((Current.Text is "class" or "model") && Peek(2).Text == "{" ||
+            Current.Text == "record" && Peek(2 + recordOffset).Text is "{" or "(" or ";")
         {
-            Next(); var name = Identifier().Text; Expect("{");
-            var members = ParseDeclarations(true, name); Expect("}");
-            return new ClassSyntax(name, members, modifiers.ToImmutable(), location);
+            var dataKind = Enum.Parse<ConstructKind>(Next().Text, ignoreCase: true);
+            if (recordOffset != 0) Next();
+            var name = Identifier().Text;
+            var positionalParameters = Current.Text == "(" ? ParseParameters() : default;
+            ImmutableArray<DeclarationSyntax> members = [];
+            if (!Take(";")) { Expect("{"); members = ParseDeclarations(true, name); Expect("}"); Take(";"); }
+            return new ClassSyntax(name, members, modifiers.ToImmutable(), location, dataKind, positionalParameters);
         }
         if (Constructs.TryGetValue(Current.Text, out var kind) || Current.Text == "switch")
         {
@@ -104,19 +110,7 @@ public sealed class Parser
             var initializer = Take("=") ? ParseExpression() : null; Expect(";");
             return new FieldSyntax(functionName, returnType, initializer, modifiers.ToImmutable(), location);
         }
-        Expect("(");
-        var parameters = ImmutableArray.CreateBuilder<ParameterSyntax>();
-        while (Current.Kind != TokenKind.End && Current.Text is not (")" or "{" or ";" or "}"))
-        {
-            var before = position;
-            var type = ParseType();
-            var name = Identifier();
-            var defaultValue = Take("=") ? ParseExpression() : null;
-            parameters.Add(new(type, name.Text, name.Location, defaultValue));
-            if (!Take(",")) break;
-            if (before == position) break;
-        }
-        Expect(")");
+        var parameters = ParseParameters();
         ConstructorInitializerSyntax? constructorInitializer = null;
         if (Take(":"))
         {
@@ -135,7 +129,25 @@ public sealed class Parser
         }
         else if (Current.Text == "{") functionBody = ParseBlock();
         else Expect(";");
-        return new FunctionSyntax(functionName, returnType, parameters.ToImmutable(), functionBody, modifiers.ToImmutable(), location, constructor, Initializer: constructorInitializer);
+        return new FunctionSyntax(functionName, returnType, parameters, functionBody, modifiers.ToImmutable(), location, constructor, Initializer: constructorInitializer);
+    }
+
+    private ImmutableArray<ParameterSyntax> ParseParameters()
+    {
+        Expect("(");
+        var parameters = ImmutableArray.CreateBuilder<ParameterSyntax>();
+        while (Current.Kind != TokenKind.End && Current.Text is not (")" or "{" or ";" or "}"))
+        {
+            var before = position;
+            var type = ParseType();
+            var name = Identifier();
+            var defaultValue = Take("=") ? ParseExpression() : null;
+            parameters.Add(new(type, name.Text, name.Location, defaultValue));
+            if (!Take(",")) break;
+            if (before == position) break;
+        }
+        Expect(")");
+        return parameters.ToImmutable();
     }
 
     private PropertySyntax ParseProperty(string name, TypeSyntax type, ImmutableArray<string> modifiers, SourceLocation location)
@@ -394,6 +406,10 @@ public sealed class Parser
             if (Current.Text is "++" or "--")
             {
                 var update = Next(); left = new UpdateSyntax(update.Text, left, true, update.Location); continue;
+            }
+            if (Current.Text == "with" && Peek(1).Text == "{" && parent < 9)
+            {
+                var keyword = Next(); left = new WithSyntax(left, ParseObjectInitializer(), keyword.Location); continue;
             }
             if (Current.Text == "?" && parent < 2)
             {

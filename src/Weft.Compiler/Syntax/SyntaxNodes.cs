@@ -11,11 +11,12 @@ public abstract record DeclarationSyntax(string Name, SourceLocation Location) :
 public sealed record NamespaceSyntax(string Namespace, bool FileScoped, ImmutableArray<DeclarationSyntax> Members, SourceLocation Location) : DeclarationSyntax(Namespace, Location);
 public sealed record ParameterSyntax(TypeSyntax Type, string Name, SourceLocation Location, ExpressionSyntax? Default = null) : SyntaxNode(Location);
 public sealed record ClassSyntax(string ClassName, ImmutableArray<DeclarationSyntax> Members,
-    ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(ClassName, Location);
+    ImmutableArray<string> Modifiers, SourceLocation Location, ConstructKind Kind = ConstructKind.Class,
+    ImmutableArray<ParameterSyntax> Parameters = default) : DeclarationSyntax(ClassName, Location);
 public sealed record ConstructorInitializerSyntax(string Kind, ImmutableArray<ArgumentSyntax> Arguments,
     SourceLocation Location) : SyntaxNode(Location);
 public sealed record FunctionSyntax(string FunctionName, TypeSyntax ReturnType, ImmutableArray<ParameterSyntax> Parameters,
-    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false, bool IsInitAccessor = false, ConstructorInitializerSyntax? Initializer = null) : DeclarationSyntax(FunctionName, Location);
+    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false, bool IsInitAccessor = false, ConstructorInitializerSyntax? Initializer = null, bool IsPrimaryConstructor = false) : DeclarationSyntax(FunctionName, Location);
 public sealed record FieldSyntax(string FieldName, TypeSyntax Type, ExpressionSyntax? Initializer,
     ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(FieldName, Location);
 public sealed record AccessorSyntax(string Kind, BlockSyntax? Body, ImmutableArray<string> Modifiers,
@@ -61,4 +62,5 @@ public sealed record MemberInitializerSyntax(string Name, ExpressionSyntax? Valu
     SourceLocation Location) : SyntaxNode(Location);
 public sealed record NewSyntax(TypeSyntax Type, ImmutableArray<ArgumentSyntax> Arguments, SourceLocation Location,
     ImmutableArray<MemberInitializerSyntax> Initializers = default) : ExpressionSyntax(Location);
+public sealed record WithSyntax(ExpressionSyntax Receiver, ImmutableArray<MemberInitializerSyntax> Initializers, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record MemberSyntax(ExpressionSyntax Target, string Member, SourceLocation Location) : ExpressionSyntax(Location);

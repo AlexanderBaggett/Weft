@@ -231,7 +231,7 @@ is marked complete.
 
 ### Constructor-chain checkpoint — 2026-09-30
 
-Worktree based on `81287b2`, extending P02-003/011/032. `: this(...)` delegates through
+Committed and pushed as `50829b0`, extending P02-003/011/032. `: this(...)` delegates through
 ordinary overload/argument rules; `: base()` is accepted for the current root class.
 Field and auto-property initializers run once at the chain's terminal constructor,
 then bodies run from inner to outer on the same object. Parameter mutations and named
@@ -257,8 +257,41 @@ See [constructor chaining](../../contracts/constructors.md) and its
 Inheritance/base arguments, static initialization, models/records, and remaining type
 integration stay required. No parent task is marked complete by this checkpoint.
 
-**Next:** continue P02-003 with models and records, plus static member/type initialization
-and the remaining inheritance/type work under P02-004. Generic/interface/nullable types and complete public
+### Model/record checkpoint — 2026-09-30
+
+Worktree based on `50829b0`, extending P02-003/011/032. Plain models retain identity
+and default public fields. Body/positional records retain reference layout while
+comparing/hash-combining stored data. Positional get/init properties and constructor
+parameters reuse ordinary overload and initialization checks. Shallow `with` copies
+preserve aliasing, evaluation order, required-member completion, and init authority.
+Explicit record copy constructors run before updates without declaration initializers.
+See [models and records](../../contracts/data-types.md) and the
+[runnable example](../../../examples/data/Program.weft).
+
+- `dotnet test Weft.slnx --no-restore`: **383 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Seven new executable conformance programs bring the case count to 58. Binding/IR
+  coverage checks data-kind and positional contracts, invalid copies, access,
+  non-null initialization, and preservation of init authority.
+- Independent implementation review found no actionable code defects. Additional
+  reviewer programs passed on both targets for parameter mutations in positional
+  initializers, source-ordered named arguments, explicit positional fields, and custom
+  copies. Four malformed copy-metadata cases were rejected. Roslyn comparisons confirm
+  initializer order and explicit-field behavior. A wording issue was corrected: a
+  non-copy positional constructor requires a `this(...)` initializer, which may target
+  a copy constructor as well as the primary/other ordinary constructors.
+- CLI runs of the data example on both backends printed `Ada:50`, `Ada:75`, `true`,
+  `true`, `2`, `false`, and `Grace:2`. All 47 Markdown documents have valid relative
+  link targets; `git diff --check` passes. Independent documentation/example review is
+  complete. All 37 record binding/IR checks also passed after the wording correction.
+  Hosted CI remains deferred.
+
+Record customization, source-callable synthesized copy constructors,
+display/deconstruction, inheritance and broader type/provenance integration stay
+required work. No parent task is marked complete.
+
+**Next:** continue P02-003 with remaining record features and static member/type initialization,
+then the remaining inheritance/type work under P02-004. Generic/interface/nullable types and complete public
 project contracts remain under their original tasks before services and shared
 middleware integration. Preserve the accepted pipeline syntax; its graph/project binding remains
 owned by P03-001 and P06-001/003. Append new work with unused task IDs when scope grows.

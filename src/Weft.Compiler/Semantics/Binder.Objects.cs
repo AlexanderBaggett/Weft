@@ -14,7 +14,7 @@ public sealed partial class Binder
     private void RequireInitialized(SourceLocation location, bool completing = false)
     {
         if (!currentFunction.IsConstructor) return;
-        var missing = fields[currentFunction.ContainingType!].Where(f => f.Symbol.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(f.Symbol.Id) && !(completing && f.Symbol.Required)).Select(f => f.Symbol.Name).ToArray();
+        var missing = fields[currentFunction.ContainingType!].Where(f => f.Symbol.Type.Kind is TypeKind.String or TypeKind.Nominal && !initializedFields.Contains(f.Symbol.Id) && !(completing && f.Symbol.Required && !currentFunction.IsCopyConstructor)).Select(f => f.Symbol.Name).ToArray();
         if (missing.Length > 0) diagnostics.Error("WF2022", "Constructor must initialize non-null fields before this escapes: " + string.Join(", ", missing) + ".", location);
     }
     private void RequireFieldInitialized(FieldSymbol field, IrExpression receiver, SourceLocation location)

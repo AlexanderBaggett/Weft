@@ -2,7 +2,8 @@
 
 Weft's first release still includes the full language on .NET and JVM. The current
 compiler includes the Phase 1 foundation and Phase 2 ordinary-language work: functions,
-classes, chained constructors, object initializers, required members, fields, instance
+classes/models/records, positional and chained constructors, value equality/hash,
+shallow copies and custom copy constructors, object initializers, required members, fields, instance
 properties/get/set/init accessors, instance/static methods,
 overloads, named/optional
 arguments, loops with break/continue, conditionals, update/compound-assignment
@@ -117,6 +118,18 @@ dotnet run --project src/Weft.Cli -- run --project examples/constructors --backe
 ```
 
 Each run prints `Ada:25` and `Grace:75`. See [constructor chaining](contracts/constructors.md).
+
+The [data example](../examples/data/Program.weft) uses a model customer inside an order
+record, changes quantity with a shallow copy, and compares values and hashes:
+
+```sh
+dotnet run --project src/Weft.Cli -- run --project examples/data --backend dotnet
+dotnet run --project src/Weft.Cli -- run --project examples/data --backend jvm
+```
+
+Each run prints `Ada:50`, `Ada:75`, `true`, `true`, `2`, `false`, and `Grace:2`.
+See [models and records](contracts/data-types.md). WF2030 covers invalid `with` targets
+or initializer forms; WF2031 covers invalid positional/copy constructor contracts.
 
 ## Initial manifest
 

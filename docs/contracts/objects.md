@@ -4,7 +4,7 @@ This executable Phase 2 checkpoint implements ordinary classes, instance fields,
 constructors, and instance methods on .NET and JVM. It follows the reference/aliasing
 and C# evaluation direction accepted in [decision 0002](../decisions/0002-ordinary-and-portable-contracts.md).
 The [classes example](../../examples/classes/Program.weft) runs on both targets.
-[Instance properties](properties.md) are also executable. Models, records, and the other
+[Instance properties](properties.md) are also executable. [Models and records](data-types.md) are executable too. The other
 object features listed below remain required
 first-release work in P02-001/003/004/006/011.
 
@@ -121,8 +121,9 @@ returns while traversing function bodies for generated helpers.
 ## Remaining object work
 
 [Object/nested initializers, required members, and init accessors](initialization.md)
-and [constructor chaining](constructors.md) are executable. Models, records and
-record value equality/copying, inheritance/interfaces, nested and generic types,
+and [constructor chaining](constructors.md) are executable, as are
+[model/record construction, value equality and copying](data-types.md).
+Record customization/display/deconstruction, inheritance/interfaces, nested and generic types,
 nullable references, static fields/properties and type initialization,
 indexers, and callable members remain required work. See [properties](properties.md)
 for currently executable accessor forms.

@@ -91,7 +91,9 @@ public sealed class FrontendTests
             var keyword = kind == ConstructKind.SwitchGroup ? "switch group" : kind.ToString().ToLowerInvariant();
             var tree = new Parser(new("inventory.weft", keyword + " Example;")).Parse();
             Assert.Empty(tree.Diagnostics);
-            Assert.Equal(kind, Assert.IsType<ConstructSyntax>(Assert.Single(tree.Declarations)).Kind);
+            var declaration = Assert.Single(tree.Declarations);
+            if (kind == ConstructKind.Record) Assert.Equal(kind, Assert.IsType<ClassSyntax>(declaration).Kind);
+            else Assert.Equal(kind, Assert.IsType<ConstructSyntax>(declaration).Kind);
         }
     }
 
