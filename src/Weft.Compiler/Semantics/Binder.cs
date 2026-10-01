@@ -18,6 +18,7 @@ public sealed class Binder
     private readonly List<(FunctionSyntax Syntax, FunctionSymbol Symbol, string Namespace)> bodies = [];
     private readonly HashSet<IntrinsicSignature> intrinsics = [];
     private int nextSymbol;
+    private int loopDepth;
     private SymbolScope scope = new();
     private FunctionSymbol currentFunction = null!;
     private string currentNamespace = "";
@@ -40,7 +41,7 @@ public sealed class Binder
             foreach (var modifier in syntax.Modifiers)
                 if (modifier is "async" or "pure" or "idempotent" or "external") diagnostics.Error("WF2009", $"The '{modifier}' semantic pass is scheduled for Phase 2/4 and is not implemented yet.", syntax.Location);
             var body = BindBlock(syntax.Body);
-            if (symbol.ReturnType != WeftType.Void && !AlwaysReturns(body)) diagnostics.Error("WF2007", $"Not all paths in '{symbol.Name}' return '{symbol.ReturnType.Name}'.", syntax.Location);
+            if (symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(body)) diagnostics.Error("WF2007", $"Not all paths in '{symbol.Name}' return '{symbol.ReturnType.Name}'.", syntax.Location);
             bound.Add(new(symbol, body, new(syntax.Location)));
         }
         var module = diagnostics.HasErrors ? null : new IrModule(name, bound.ToImmutable(), intrinsics.OrderBy(x => x.Name, StringComparer.Ordinal).ToImmutableArray(), Intrinsics.AbiVersion);
@@ -137,10 +138,10 @@ public sealed class Binder
         var terminated = false;
         foreach (var statement in block.Statements)
         {
-            if (terminated) diagnostics.Error("WF2010", "Statement is unreachable after a guaranteed return.", statement.Location);
+            if (terminated) diagnostics.Error("WF2010", "Statement is unreachable after a guaranteed control-flow exit.", statement.Location);
             var bound = BindStatement(statement);
             statements.Add(bound);
-            terminated |= AlwaysReturns(bound);
+            terminated |= !ControlFlow.CanComplete(bound);
         }
         scope = previous;
         return new(statements.ToImmutable(), new(block.Location));
@@ -148,6 +149,8 @@ public sealed class Binder
 
     private IrStatement BindNestedStatement(StatementSyntax statement)
     {
+        if (statement is VariableSyntax)
+            diagnostics.Error("WF2017", "A variable declaration used as a branch or loop body must be enclosed in braces.", statement.Location);
         var previous = scope; scope = new(previous);
         var result = BindStatement(statement); scope = previous;
         return result;
@@ -158,6 +161,13 @@ public sealed class Binder
         var origin = new SourceOrigin(statement.Location);
         switch (statement)
         {
+            case EmptySyntax: return new IrBlock([], origin);
+            case BreakSyntax:
+                if (loopDepth == 0) diagnostics.Error("WF2016", "break requires an enclosing loop.", statement.Location);
+                return new IrBreak(origin);
+            case ContinueSyntax:
+                if (loopDepth == 0) diagnostics.Error("WF2016", "continue requires an enclosing loop.", statement.Location);
+                return new IrContinue(origin);
             case BlockSyntax block: return BindBlock(block);
             case VariableSyntax variable:
                 var initializer = BindExpression(variable.Initializer);
@@ -182,12 +192,33 @@ public sealed class Binder
                 return new IrIf(condition, BindNestedStatement(conditional.Then), conditional.Else is null ? null : BindNestedStatement(conditional.Else), origin);
             case WhileSyntax loop:
                 var test = BindExpression(loop.Condition); Require(WeftType.Bool, test.Type, test.Origin.Location);
-                return new IrWhile(test, BindNestedStatement(loop.Body), origin);
+                return new IrWhile(test, BindLoopBody(loop.Body), origin);
+            case DoWhileSyntax loop:
+                var body = BindLoopBody(loop.Body);
+                var doTest = BindExpression(loop.Condition); Require(WeftType.Bool, doTest.Type, doTest.Origin.Location);
+                return new IrDoWhile(body, doTest, origin);
+            case ForSyntax loop:
+                var previous = scope; scope = new(previous);
+                var initializers = loop.Initializers.Select(BindStatement).ToImmutableArray();
+                var forTest = loop.Condition is null ? null : BindExpression(loop.Condition);
+                if (forTest is not null) Require(WeftType.Bool, forTest.Type, forTest.Origin.Location);
+                var iterators = loop.Iterators.Select(expression =>
+                    ((IrExpressionStatement)BindStatement(new ExpressionStatementSyntax(expression, expression.Location))).Expression).ToImmutableArray();
+                var forBody = BindLoopBody(loop.Body); scope = previous;
+                return new IrFor(initializers, forTest, iterators, forBody, origin);
             case EffectScopeSyntax effect:
                 diagnostics.Error("WF2009", $"'{effect.Kind}' syntax is represented; its semantic/lowering pass is not implemented yet.", effect.Location);
                 return new IrBlock([], origin);
             default: throw new InvalidOperationException($"Unhandled syntax: {statement.GetType().Name}");
         }
+    }
+
+    private IrStatement BindLoopBody(StatementSyntax body)
+    {
+        loopDepth++;
+        var result = BindNestedStatement(body);
+        loopDepth--;
+        return result;
     }
 
     private IrExpression BindExpression(ExpressionSyntax syntax)
@@ -250,6 +281,17 @@ public sealed class Binder
                 else if (op is not ("==" or "!=") && !IsInteger(left.Type)) diagnostics.Error("WF2003", $"Operator '{op}' requires integer operands.", binary.Location);
                 var result = op is "==" or "!=" or "<" or ">" or "<=" or ">=" or "&&" or "||" ? WeftType.Bool : left.Type;
                 return new IrBinary(left, op, right, result, origin);
+            case ConditionalSyntax conditional:
+                var condition = BindExpression(conditional.Condition); Require(WeftType.Bool, condition.Type, condition.Origin.Location);
+                var whenTrue = BindExpression(conditional.WhenTrue); var whenFalse = BindExpression(conditional.WhenFalse);
+                if (IsInteger(whenTrue.Type) && IsInteger(whenFalse.Type) && whenTrue.Type != whenFalse.Type)
+                {
+                    whenTrue = ConvertImplicit(whenTrue, WeftType.Int64); whenFalse = ConvertImplicit(whenFalse, WeftType.Int64);
+                }
+                Require(whenTrue.Type, whenFalse.Type, conditional.Location);
+                if (whenTrue.Type == WeftType.Void || whenFalse.Type == WeftType.Void)
+                    diagnostics.Error("WF2003", "A conditional expression must produce a value in both branches.", conditional.Location);
+                return new IrConditional(condition, whenTrue, whenFalse, whenTrue.Type, origin);
             case CallSyntax call: return BindCall(call);
             default:
                 diagnostics.Error("WF2009", $"Expression '{syntax.GetType().Name}' is represented but not implemented yet.", syntax.Location);
@@ -428,6 +470,4 @@ public sealed class Binder
     }
     private static bool IsInteger(WeftType type) => type == WeftType.Int32 || type == WeftType.Int64;
     private static IrConstant Error(SourceOrigin origin) => new(0, WeftType.Error, origin);
-    private static bool AlwaysReturns(IrStatement statement) => statement switch
-    { IrReturn => true, IrBlock block => block.Statements.Any(AlwaysReturns), IrIf { Else: not null } branch => AlwaysReturns(branch.Then) && AlwaysReturns(branch.Else), _ => false };
 }

@@ -320,16 +320,26 @@ foundation-statement = foundation-block
                      | "return" [ expression ] ";"
                      | "if" "(" expression ")" foundation-statement [ "else" foundation-statement ]
                      | "while" "(" expression ")" foundation-statement
+                     | "do" foundation-statement "while" "(" expression ")" ";"
+                     | "for" "(" [ for-initializer ] ";" [ expression ] ";" [ statement-expressions ] ")" foundation-statement
+                     | "break" ";" | "continue" ";" | ";"
                      | expression ";" | structural-effect-scope ;
+for-initializer = ( "var" ident "=" expression )
+                | ( type ident "=" expression { "," ident "=" expression } )
+                | statement-expressions ;
+statement-expressions = statement-expression { "," statement-expression } ;
+statement-expression = assignment-expression | call-expression ;
 expression      = literal | qualified-ident | "(" expression ")"
                 | ( "!" | "-" | "+" ) expression
                 | expression binary-op expression
+                | expression "?" expression ":" expression
                 | expression "(" [ argument { "," argument } ] ")" ;
 binary-op       = "=" | "||" | "&&" | "==" | "!=" | "<" | ">" | "<=" | ">="
                 | "+" | "-" | "*" | "/" | "%" ;
 ```
 
-Precedence from lowest to highest is assignment (right associative), OR, AND, equality,
+Precedence from lowest to highest is assignment (right associative), conditional (right
+associative), OR, AND, equality,
 comparison, addition/subtraction, multiplication/division/remainder, unary, member/call.
 Currently executable types are void (return only), bool, int32/int, int64/long, string.
 Numeric literals are decimal signed integer magnitudes with optional L suffix and
@@ -339,5 +349,6 @@ execution remain required Phase 2 work. This checkpoint is not first-release sco
 
 Functions and static methods support overloads, public/internal/private checks, named
 and optional arguments, and int32-to-int64 widening. See the
-[function contract](contracts/functions.md) for scope and current limitations. Project
+[function contract](contracts/functions.md) and [control-flow contract](contracts/control-flow.md)
+for execution, scope, return checks, and current limitations. Project
 pipeline syntax is accepted; its graph execution remains Phase 3/6 work.

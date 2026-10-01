@@ -2,7 +2,7 @@
 
 This directory turns the [roadmap](../roadmap.md) into executable work lists for the **first full release**. All seven phases and all accepted additions are required. The user leads language design; AI leads implementation and engineering.
 
-Each phase owns a folder and a `tasks.md` document. The feature register describes release scope; the phase trackers describe concrete work and verification evidence. Phase 1 is complete, with local verification evidence; Phase 2 is in progress with ordinary function and static-method support. Hosted CI was moved to Phase 6 at the designer's request. Tasks are checked only when their evidence is recorded.
+Each phase owns a folder and a `tasks.md` document. The feature register describes release scope; the phase trackers describe concrete work and verification evidence. Phase 1 is complete, with local verification evidence; Phase 2 is in progress with ordinary functions, static methods, and structured control flow. Hosted CI was moved to Phase 6 at the designer's request. Tasks are checked only when their evidence is recorded.
 
 ## Phase index
 

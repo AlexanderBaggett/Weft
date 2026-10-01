@@ -1,0 +1,7 @@
+{
+  "id": "do-loop-order",
+  "sources": {
+    "main.weft": "bool Test(int first, int second) { Print(\"test\" + first); return first < second; }\nvoid Main() {\n    var i = 0;\n    do {\n        i = i + 1;\n        if (i == 1) continue;\n        Print(\"body\" + i);\n    } while (Test(second: 2, first: i));\n    do { Print(\"once\"); } while (false);\n    do { Print(\"break\"); break; } while (Test(second: 9, first: i));\n    do ; while (false);\n    Print(i);\n}"
+  },
+  "stdout": "test1\nbody2\ntest2\nonce\nbreak\n2\n"
+}

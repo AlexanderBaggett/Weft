@@ -1,6 +1,6 @@
 # Phase 02: Language foundation and message runtime
 
-**Status:** In progress — ordinary function and static-method binding, starting with P02-001.
+**Status:** In progress — ordinary functions/static methods and structured control flow (P02-001/002).
 
 **Outcome:** Implement the ordinary language, standard-library foundation, async/message lifetime machinery, and service/receiver runtime behavior on both platforms.
 
@@ -69,9 +69,8 @@ remains deferred to P06-030.
 
 ## Evidence and next action
 
-First Phase 2 implementation checkpoint, 2026-09-06, in the uncommitted worktree based
-on `493296c` (including the completed Phase 1 foundation). No commit or publication was
-performed. The tasks above remain unchecked because their complete feature scope is
+First Phase 2 implementation checkpoint, 2026-09-06, recorded in commit `5c37877`
+(including the completed Phase 1 foundation). The tasks above remain unchecked because their complete feature scope is
 larger than this function/method checkpoint.
 
 | Tasks | Implemented portion and evidence | Remaining work |
@@ -92,6 +91,30 @@ Verification on .NET SDK 10.0.111 and OpenJDK 26.0.2, emitting Java release 21:
   a private helper, a public static method in another source file, named argument
   ordering, widening, and an omitted default through the actual project loader/build.
 - Documentation links resolve and `git diff --check` passes. Hosted CI was not added.
+
+### Control-flow checkpoint — 2026-09-30
+
+Worktree based on `5c37877`, covering portions of P02-002/011/032. Both backends now
+execute for/do loops, break/continue, empty statements, and conditional expressions.
+Loop locals, ordered initializer/iterator calls, nearest-loop exits, conditional
+int-to-long widening, and conditional optional defaults share frontend checks.
+[Shared flow analysis](../../../src/Weft.Compiler/IR/ControlFlow.cs) handles missing
+returns and guaranteed exits in both binding and IR validation. See the
+[control-flow contract](../../contracts/control-flow.md) for supported syntax and
+remaining constant-reachability work.
+
+- `dotnet test Weft.slnx --no-restore`: **130 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Five new conformance programs assert independent output expectations on both runtimes;
+  28 frontend/IR checks cover invalid control flow. There are now 25 conformance cases.
+- Independent agent review completed with no actionable regressions. Additional CLI
+  programs passed on both backends, covering named arguments throughout loop headers,
+  conditional branch selection, continue order, nested returns, and unreachable iterators.
+- `git diff --check` passes. Hosted CI remains deferred.
+
+P02-002 remains open for matching, remaining expression forms, constant reachability,
+and integration with collection iteration and cleanup. No parent task is marked
+complete by this checkpoint; the full release scope is unchanged.
 
 **Next:** continue P02-001/003 with ordinary classes/models/records, construction and
 field/property access, using these method symbols and call rules. Extend instance

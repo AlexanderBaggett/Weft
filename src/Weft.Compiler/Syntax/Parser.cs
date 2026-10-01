@@ -187,6 +187,16 @@ public sealed class Parser
     {
         var location = Current.Location;
         if (Current.Text == "{") return ParseBlock();
+        if (Take(";")) return new EmptySyntax(location);
+        if (Take("break")) { Expect(";"); return new BreakSyntax(location); }
+        if (Take("continue")) { Expect(";"); return new ContinueSyntax(location); }
+        if (Take("for")) return ParseFor(location);
+        if (Take("do"))
+        {
+            var body = ParseStatement(); Expect("while"); Expect("(");
+            var condition = ParseExpression(); Expect(")"); Expect(";");
+            return new DoWhileSyntax(body, condition, location);
+        }
         if (Take("return"))
         {
             var expression = Current.Text == ";" ? null : ParseExpression();
@@ -225,8 +235,39 @@ public sealed class Parser
         return new ExpressionStatementSyntax(value, location);
     }
 
+    private ForSyntax ParseFor(SourceLocation location)
+    {
+        Expect("(");
+        var initializers = ImmutableArray.CreateBuilder<StatementSyntax>();
+        if (Current.Text != ";")
+        {
+            if (Current.Text == "var" || Current.Kind == TokenKind.Identifier && Peek(1).Kind == TokenKind.Identifier)
+            {
+                TypeSyntax? type = Take("var") ? null : ParseType();
+                do
+                {
+                    var name = Identifier(); Expect("=");
+                    initializers.Add(new VariableSyntax(type, name.Text, ParseExpression(), name.Location));
+                } while (Take(","));
+                if (type is null && initializers.Count > 1)
+                    diagnostics.Error("WF1104", "A var declaration must declare one variable; use an explicit type for multiple for-loop variables.", location);
+            }
+            else do
+            {
+                var expression = ParseExpression();
+                initializers.Add(new ExpressionStatementSyntax(expression, expression.Location));
+            } while (Take(","));
+        }
+        Expect(";");
+        var condition = Current.Text == ";" ? null : ParseExpression(); Expect(";");
+        var iterators = ImmutableArray.CreateBuilder<ExpressionSyntax>();
+        if (Current.Text != ")") do { iterators.Add(ParseExpression()); } while (Take(","));
+        Expect(")");
+        return new(initializers.ToImmutable(), condition, iterators.ToImmutable(), ParseStatement(), location);
+    }
+
     private static int Precedence(string token) => token switch
-    { "=" => 1, "||" => 2, "&&" => 3, "==" or "!=" => 4, "<" or ">" or "<=" or ">=" => 5, "+" or "-" => 6, "*" or "/" or "%" => 7, _ => 0 };
+    { "=" => 1, "||" => 3, "&&" => 4, "==" or "!=" => 5, "<" or ">" or "<=" or ">=" => 6, "+" or "-" => 7, "*" or "/" or "%" => 8, _ => 0 };
 
     private ExpressionSyntax ParseExpression(int parent = 0)
     {
@@ -234,7 +275,7 @@ public sealed class Parser
         if (Current.Text is "!" or "-" or "+")
         {
             var op = Next();
-            left = new UnarySyntax(op.Text, ParseExpression(8), op.Location);
+            left = new UnarySyntax(op.Text, ParseExpression(9), op.Location);
         }
         else if (Take("(")) { left = ParseExpression(); Expect(")"); }
         else if (Current.Kind is TokenKind.Number or TokenKind.String or TokenKind.InterpolatedString || Current.Text is "true" or "false" or "null") left = new LiteralSyntax(Next());
@@ -258,6 +299,12 @@ public sealed class Parser
                 } while (Take(","));
                 Expect(")");
                 left = new CallSyntax(left, arguments.ToImmutable(), left.Location);
+                continue;
+            }
+            if (Current.Text == "?" && parent < 2)
+            {
+                var question = Next(); var whenTrue = ParseExpression(); Expect(":");
+                left = new ConditionalSyntax(left, whenTrue, ParseExpression(), question.Location);
                 continue;
             }
             var precedence = Precedence(Current.Text);

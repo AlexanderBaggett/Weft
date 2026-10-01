@@ -1,0 +1,7 @@
+{
+  "id": "loop-return-paths",
+  "sources": {
+    "main.weft": "int FromWhile() { while (true) { return 11; } }\nint FromFor() { for (; ; Print(\"unreachable\")) { return 22; } }\nint FromDo() { do { return 33; } while (false); }\nint Nested() { for (;;) { while (true) { break; } return 44; } }\nint Find(int target) { for (var i = 0; i < 5; i = i + 1) { if (i == target) return i; } return -1; }\nint Search(bool again) { var i = 0; do { i = i + 1; if (again && i < 3) continue; return i; } while (true); }\nvoid NeverCalled() { for (;;) continue; }\nvoid Main() { Print(FromWhile()); Print(FromFor()); Print(FromDo()); Print(Nested()); Print(Find(3)); Print(Find(9)); Print(Search(true)); }"
+  },
+  "stdout": "11\n22\n33\n44\n3\n-1\n3\n"
+}

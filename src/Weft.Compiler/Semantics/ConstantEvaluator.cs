@@ -43,6 +43,18 @@ internal static class ConstantEvaluator
                 _ => null
             };
         }
+        if (expression is ConditionalSyntax conditional)
+        {
+            // Every arm must be a legal constant, even though only one supplies
+            // the value. This also prevents hiding a call in an optional default.
+            var condition = EvaluateCore(conditional.Condition);
+            var whenTrue = EvaluateCore(conditional.WhenTrue); var whenFalse = EvaluateCore(conditional.WhenFalse);
+            if (condition?.Value is not bool test || whenTrue is null || whenFalse is null) return null;
+            if (whenTrue.Type == whenFalse.Type) return test ? whenTrue : whenFalse;
+            if (whenTrue.Value is int or long && whenFalse.Value is int or long)
+                return new(Convert.ToInt64((test ? whenTrue : whenFalse).Value, CultureInfo.InvariantCulture), WeftType.Int64);
+            return null;
+        }
         if (expression is not BinarySyntax binary) return null;
         var left = EvaluateCore(binary.Left); var right = EvaluateCore(binary.Right);
         if (left is null || right is null) return null;

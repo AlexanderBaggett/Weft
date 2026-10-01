@@ -31,6 +31,12 @@ public sealed record ReturnSyntax(ExpressionSyntax? Expression, SourceLocation L
 public sealed record ExpressionStatementSyntax(ExpressionSyntax Expression, SourceLocation Location) : StatementSyntax(Location);
 public sealed record IfSyntax(ExpressionSyntax Condition, StatementSyntax Then, StatementSyntax? Else, SourceLocation Location) : StatementSyntax(Location);
 public sealed record WhileSyntax(ExpressionSyntax Condition, StatementSyntax Body, SourceLocation Location) : StatementSyntax(Location);
+public sealed record DoWhileSyntax(StatementSyntax Body, ExpressionSyntax Condition, SourceLocation Location) : StatementSyntax(Location);
+public sealed record ForSyntax(ImmutableArray<StatementSyntax> Initializers, ExpressionSyntax? Condition,
+    ImmutableArray<ExpressionSyntax> Iterators, StatementSyntax Body, SourceLocation Location) : StatementSyntax(Location);
+public sealed record BreakSyntax(SourceLocation Location) : StatementSyntax(Location);
+public sealed record ContinueSyntax(SourceLocation Location) : StatementSyntax(Location);
+public sealed record EmptySyntax(SourceLocation Location) : StatementSyntax(Location);
 public sealed record EffectScopeSyntax(string Kind, ImmutableArray<SyntaxElement> Header, GroupElement Body, SourceLocation Location) : StatementSyntax(Location);
 
 public abstract record ExpressionSyntax(SourceLocation Location) : SyntaxNode(Location);
@@ -38,6 +44,8 @@ public sealed record LiteralSyntax(SyntaxToken Token) : ExpressionSyntax(Token.L
 public sealed record NameSyntax(string Name, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record UnarySyntax(string Operator, ExpressionSyntax Operand, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record BinarySyntax(ExpressionSyntax Left, string Operator, ExpressionSyntax Right, SourceLocation Location) : ExpressionSyntax(Location);
+public sealed record ConditionalSyntax(ExpressionSyntax Condition, ExpressionSyntax WhenTrue, ExpressionSyntax WhenFalse,
+    SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record ArgumentSyntax(ExpressionSyntax Expression, string? Name, SourceLocation Location) : SyntaxNode(Location);
 public sealed record CallSyntax(ExpressionSyntax Target, ImmutableArray<ArgumentSyntax> Arguments, SourceLocation Location) : ExpressionSyntax(Location);
 public sealed record MemberSyntax(ExpressionSyntax Target, string Member, SourceLocation Location) : ExpressionSyntax(Location);

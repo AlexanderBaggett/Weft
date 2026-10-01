@@ -28,6 +28,12 @@ public static class CallAdapters
                     Expression(branch.Condition); Statement(branch.Then);
                     if (branch.Else is not null) Statement(branch.Else); break;
                 case IrWhile loop: Expression(loop.Condition); Statement(loop.Body); break;
+                case IrDoWhile loop: Statement(loop.Body); Expression(loop.Condition); break;
+                case IrFor loop:
+                    foreach (var initializer in loop.Initializers) Statement(initializer);
+                    if (loop.Condition is not null) Expression(loop.Condition);
+                    foreach (var iterator in loop.Iterators) Expression(iterator);
+                    Statement(loop.Body); break;
             }
         }
         void Expression(IrExpression expression)
@@ -38,6 +44,8 @@ public static class CallAdapters
                     if (!call.ParameterOrder.IsDefaultOrEmpty) calls.TryAdd(Name(call), call);
                     foreach (var argument in call.Arguments) Expression(argument); break;
                 case IrIntrinsic intrinsic: foreach (var argument in intrinsic.Arguments) Expression(argument); break;
+                case IrConditional conditional:
+                    Expression(conditional.Condition); Expression(conditional.WhenTrue); Expression(conditional.WhenFalse); break;
                 case IrAssign assign: Expression(assign.Value); break;
                 case IrConvert convert: Expression(convert.Operand); break;
                 case IrUnary unary: Expression(unary.Operand); break;

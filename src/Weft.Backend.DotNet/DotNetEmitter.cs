@@ -65,6 +65,21 @@ public sealed class DotNetEmitter
                 case IrWhile loop:
                     writer.WriteLine($"while ({Expression(loop.Condition)})", loop.Origin);
                     writer.WriteLine("{"); Statement(loop.Body); writer.WriteLine("}"); break;
+                case IrBreak: writer.WriteLine("break;", statement.Origin); break;
+                case IrContinue: writer.WriteLine("continue;", statement.Origin); break;
+                case IrDoWhile loop:
+                    writer.WriteLine("do {", loop.Origin); Statement(loop.Body);
+                    writer.WriteLine($"}} while ({Expression(loop.Condition)});", loop.Origin); break;
+                case IrFor loop:
+                    // A surrounding block gives initializer locals their exact Weft
+                    // scope. A native for preserves continue -> iterators -> condition.
+                    writer.WriteLine("{", loop.Origin);
+                    foreach (var initializer in loop.Initializers) Statement(initializer);
+                    var condition = loop.Condition is null ? "true" : Expression(loop.Condition);
+                    var iterators = ControlFlow.ReachesIterator(loop.Body)
+                        ? string.Join(", ", loop.Iterators.Select(StatementExpression)) : "";
+                    writer.WriteLine($"for (; {condition}; {iterators}) {{", loop.Origin);
+                    Statement(loop.Body); writer.WriteLine("}"); writer.WriteLine("}"); break;
                 default: throw new InvalidOperationException($"Unsupported IR statement {statement.GetType().Name}.");
             }
         }
@@ -85,6 +100,7 @@ public sealed class DotNetEmitter
             int value => value.ToString(CultureInfo.InvariantCulture), long value => value.ToString(CultureInfo.InvariantCulture) + "L",
             _ => throw new InvalidOperationException("Unsupported IR constant.")
         },
+        IrConditional conditional => $"({Expression(conditional.Condition)} ? {Expression(conditional.WhenTrue)} : {Expression(conditional.WhenFalse)})",
         IrRead read => $"v_{read.Symbol.Id}",
         IrConvert convert => $"((long)({Expression(convert.Operand)}))",
         IrAssign assign => $"(v_{assign.Symbol.Id} = {Expression(assign.Value)})",

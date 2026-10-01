@@ -1,0 +1,7 @@
+{
+  "id": "conditional-expressions",
+  "sources": {
+    "main.weft": "int Mark(int value) { Print(\"mark\" + value); return value; }\nbool Condition(bool value) { Print(\"condition\"); return value; }\nlong Add(long first, long second) => first + second;\nlong Default(long value = true ? 4 : 9L) => value;\nvoid Main() {\n    Print(Condition(true) ? Mark(1) : Mark(2));\n    Print(Condition(false) ? Mark(3) : Mark(4));\n    Print(false ? Mark(5) : true ? Mark(6) : Mark(7));\n    Print(true || false ? 10 : 11);\n    var v = 0;\n    v = false ? 1 : v = 2;\n    Print(v);\n    Print(true ? v = 3 : v = 4);\n    Print(v);\n    Print(false ? 1 / 0 : 12L);\n    Print(true ? Add(second: Mark(8), first: Mark(9)) : 0);\n    Print(false ? \"left\" : \"right\");\n    Print(Default());\n}"
+  },
+  "stdout": "condition\nmark1\n1\ncondition\nmark4\n4\nmark6\n6\n10\n2\n3\n3\n12\nmark8\nmark9\n17\nright\n4\n"
+}

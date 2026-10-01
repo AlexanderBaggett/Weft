@@ -13,8 +13,11 @@ Unsupported semantic passes
 produce WF2009; parsing a declaration does not make its checks pass.
 
 Control flow is structured and explicit. Operands evaluate left to right; boolean
-operators short-circuit. A value-returning function must return on every path; a statement
-after a guaranteed return is diagnosed before either backend. Every variable/function
+operators short-circuit. Conditional expressions evaluate exactly one arm. A value-returning
+function cannot reach its end without a return; a statement after a guaranteed exit
+is diagnosed before either backend. Shared [flow analysis](../../src/Weft.Compiler/IR/ControlFlow.cs)
+tracks return/break/continue and consumes jumps at the nearest loop. See the
+[control-flow contract](control-flow.md) for loop scope and current reachability limits. Every variable/function
 has a stable identity within one compilation. Source files and declarations are visited
 in deterministic order. A symbol's emitted name is independent of host keywords.
 

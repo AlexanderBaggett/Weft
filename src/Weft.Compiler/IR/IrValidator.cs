@@ -30,7 +30,7 @@ public static class IrValidator
                 if (!locals.TryAdd(parameter.Id, parameter) || !identities.Add(parameter.Id)) Fail("Duplicate IR parameter identity.", function.Origin);
             }
             Statement(function.Body, locals, identities, function.Symbol.ReturnType);
-            if (function.Symbol.ReturnType != WeftType.Void && !Returns(function.Body)) Fail("IR function can fall through without a return value.", function.Origin);
+            if (function.Symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(function.Body)) Fail("IR function can fall through without a return value.", function.Origin);
         }
         return diagnostics.ToImmutableArray();
 
@@ -40,7 +40,7 @@ public static class IrValidator
             if (type != WeftType.Bool && type != WeftType.Int32 && type != WeftType.Int64 && type != WeftType.String && !(allowVoid && type == WeftType.Void))
                 Fail($"Type '{type.Name}' is not in the executable IR version's portable type set.", origin);
         }
-        void Statement(IrStatement statement, Dictionary<int, VariableSymbol> locals, HashSet<int> identities, WeftType returned)
+        void Statement(IrStatement statement, Dictionary<int, VariableSymbol> locals, HashSet<int> identities, WeftType returned, int loopDepth = 0)
         {
             switch (statement)
             {
@@ -50,8 +50,8 @@ public static class IrValidator
                     foreach (var child in block.Statements)
                     {
                         if (terminated) Fail("Unreachable IR statement.", child.Origin);
-                        Statement(child, nested, identities, returned);
-                        terminated |= Returns(child);
+                        Statement(child, nested, identities, returned, loopDepth);
+                        terminated |= !ControlFlow.CanComplete(child);
                     }
                     break;
                 case IrVariable variable:
@@ -75,13 +75,35 @@ public static class IrValidator
                 case IrIf conditional:
                     Expression(conditional.Condition, locals);
                     if (conditional.Condition.Type != WeftType.Bool) Fail("IR branch condition must be bool.", conditional.Origin);
-                    Statement(conditional.Then, new(locals), identities, returned);
-                    if (conditional.Else is not null) Statement(conditional.Else, new(locals), identities, returned);
+                    Statement(conditional.Then, new(locals), identities, returned, loopDepth);
+                    if (conditional.Else is not null) Statement(conditional.Else, new(locals), identities, returned, loopDepth);
                     break;
                 case IrWhile loop:
                     Expression(loop.Condition, locals);
                     if (loop.Condition.Type != WeftType.Bool) Fail("IR loop condition must be bool.", loop.Origin);
-                    Statement(loop.Body, new(locals), identities, returned); break;
+                    Statement(loop.Body, new(locals), identities, returned, loopDepth + 1); break;
+                case IrDoWhile loop:
+                    Expression(loop.Condition, locals);
+                    if (loop.Condition.Type != WeftType.Bool) Fail("IR loop condition must be bool.", loop.Origin);
+                    Statement(loop.Body, new(locals), identities, returned, loopDepth + 1); break;
+                case IrFor loop:
+                    var forLocals = new Dictionary<int, VariableSymbol>(locals);
+                    foreach (var initializer in loop.Initializers)
+                    {
+                        if (initializer is not (IrVariable or IrExpressionStatement)) Fail("IR for initializer must be a variable or expression statement.", initializer.Origin);
+                        Statement(initializer, forLocals, identities, returned, loopDepth);
+                    }
+                    if (loop.Condition is not null)
+                    {
+                        Expression(loop.Condition, forLocals);
+                        if (loop.Condition.Type != WeftType.Bool) Fail("IR loop condition must be bool.", loop.Origin);
+                    }
+                    foreach (var iterator in loop.Iterators)
+                        Statement(new IrExpressionStatement(iterator, iterator.Origin), forLocals, identities, returned, loopDepth);
+                    Statement(loop.Body, new(forLocals), identities, returned, loopDepth + 1); break;
+                case IrBreak or IrContinue:
+                    if (loopDepth == 0) Fail("IR loop exit requires an enclosing loop.", statement.Origin);
+                    break;
                 default: Fail("Unrecognized IR statement; extend both backends and the validator together.", statement.Origin); break;
             }
         }
@@ -92,6 +114,11 @@ public static class IrValidator
             {
                 case IrConstant constant:
                     if (!ConstantMatches(constant.Value, constant.Type)) Fail("IR constant value does not match its type.", constant.Origin);
+                    break;
+                case IrConditional conditional:
+                    Expression(conditional.Condition, locals); Expression(conditional.WhenTrue, locals); Expression(conditional.WhenFalse, locals);
+                    if (conditional.Condition.Type != WeftType.Bool || conditional.WhenTrue.Type != conditional.Type || conditional.WhenFalse.Type != conditional.Type)
+                        Fail("IR conditional condition or branch type mismatch.", conditional.Origin);
                     break;
                 case IrConvert conversion:
                     Expression(conversion.Operand, locals);
@@ -150,6 +177,4 @@ public static class IrValidator
     private static bool SameSignature(IntrinsicSignature left, IntrinsicSignature right) => left.Name == right.Name && left.Result == right.Result && left.Parameters.SequenceEqual(right.Parameters);
     private static bool ConstantMatches(object value, WeftType type) => value is int && type == WeftType.Int32 || value is long && type == WeftType.Int64 || value is bool && type == WeftType.Bool || value is string && type == WeftType.String;
     private static bool Integer(WeftType type) => type == WeftType.Int32 || type == WeftType.Int64;
-    private static bool Returns(IrStatement statement) => statement switch
-    { IrReturn => true, IrBlock block => block.Statements.Any(Returns), IrIf { Else: not null } branch => Returns(branch.Then) && Returns(branch.Else), _ => false };
 }

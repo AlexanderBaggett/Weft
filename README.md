@@ -84,6 +84,7 @@ switches qualify.
 | [compiler](docs/compiler.md) | Shared compiler and IR, .NET/JVM backends, runtime contracts |
 | [numeric types](docs/contracts/numeric-types.md) | Common C#/Java types, C# decimal behavior, and portable runtime support |
 | [functions and methods](docs/contracts/functions.md) | Executable overloads, named/optional arguments, static helpers, visibility, and current limits |
+| [ordinary control flow](docs/contracts/control-flow.md) | Loop execution, break/continue, conditional expressions, and shared return checks |
 | [sharing middleware](docs/contracts/project-pipelines.md) | Explicit node connections and pipeline adoption across projects and DLL/jar boundaries |
 | [roadmap](docs/roadmap.md) | AI engineering workflow, evolving milestones, and full-release criteria |
 | [feature register](docs/feature-status.md) | Complete first-release inventory and implementation tracking |

@@ -14,6 +14,11 @@ public sealed record IrReturn(IrExpression? Expression, SourceOrigin Origin) : I
 public sealed record IrExpressionStatement(IrExpression Expression, SourceOrigin Origin) : IrStatement(Origin);
 public sealed record IrIf(IrExpression Condition, IrStatement Then, IrStatement? Else, SourceOrigin Origin) : IrStatement(Origin);
 public sealed record IrWhile(IrExpression Condition, IrStatement Body, SourceOrigin Origin) : IrStatement(Origin);
+public sealed record IrDoWhile(IrStatement Body, IrExpression Condition, SourceOrigin Origin) : IrStatement(Origin);
+public sealed record IrFor(ImmutableArray<IrStatement> Initializers, IrExpression? Condition,
+    ImmutableArray<IrExpression> Iterators, IrStatement Body, SourceOrigin Origin) : IrStatement(Origin);
+public sealed record IrBreak(SourceOrigin Origin) : IrStatement(Origin);
+public sealed record IrContinue(SourceOrigin Origin) : IrStatement(Origin);
 public abstract record IrExpression(WeftType Type, SourceOrigin Origin) : IrNode(Origin);
 public sealed record IrConstant(object Value, WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrRead(VariableSymbol Symbol, SourceOrigin Origin) : IrExpression(Symbol.Type, Origin);
@@ -24,6 +29,8 @@ public sealed record IrBinary(IrExpression Left, string Operator, IrExpression R
 // its destination parameter; default/empty means the identity order.
 public sealed record IrCall(FunctionSymbol Function, ImmutableArray<IrExpression> Arguments, SourceOrigin Origin,
     ImmutableArray<int> ParameterOrder = default) : IrExpression(Function.ReturnType, Origin);
+public sealed record IrConditional(IrExpression Condition, IrExpression WhenTrue, IrExpression WhenFalse,
+    WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrConvert(IrExpression Operand, WeftType Type, SourceOrigin Origin) : IrExpression(Type, Origin);
 public sealed record IrIntrinsic(IntrinsicSignature Signature, ImmutableArray<IrExpression> Arguments, SourceOrigin Origin) : IrExpression(Signature.Result, Origin);
 

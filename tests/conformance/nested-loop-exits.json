@@ -1,0 +1,7 @@
+{
+  "id": "nested-loop-exits",
+  "sources": {
+    "main.weft": "void Main() {\n    var count = 0;\n    for (var outer = 0; outer < 3; outer = outer + 1) {\n        for (var inner = 0; inner < 4; inner = inner + 1) {\n            if (inner == 1) continue;\n            if (inner == 3) break;\n            count = count + 1;\n        }\n        if (outer == 1) continue;\n        Print(outer);\n    }\n    Print(count);\n    var i = 0;\n    while (i < 5) {\n        i = i + 1;\n        if (i == 2) continue;\n        if (i == 4) break;\n        Print(i);\n    }\n    Print(i);\n}"
+  },
+  "stdout": "0\n2\n6\n1\n3\n4\n"
+}

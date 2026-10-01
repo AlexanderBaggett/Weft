@@ -1,0 +1,7 @@
+{
+  "id": "for-loop-order",
+  "sources": {
+    "main.weft": "int Mark(string name, int value) { Print(name + value); return value; }\nbool Test(int value) { Print(\"test\" + value); return value < 4; }\nint Add(int first, int second) => first + second;\nvoid Main() {\n    for (var i = Mark(\"init\", 0); Test(i); i = Add(second: Mark(\"step\", i), first: 1), Print(\"iter\" + i)) {\n        if (i == 1) continue;\n        Print(\"body\" + i);\n        if (i == 2) break;\n    }\n    var sum = 0;\n    for (int i = 0, j = 3; i < j; i = i + 1, j = j - 1) sum = sum + i + j;\n    Print(sum);\n    var count = 0;\n    for (count = 0, Print(\"assigned\"); count < 2; count = count + 1) ;\n    Print(count);\n    for (;;) { count = count + 1; break; }\n    Print(count);\n    for (; false; Print(\"unreachable iterator\")) Print(\"unreachable body\");\n    Print(\"done\");\n}"
+  },
+  "stdout": "init0\ntest0\nbody0\nstep0\niter1\ntest1\nstep1\niter2\ntest2\nbody2\n6\nassigned\n2\n3\ndone\n"
+}

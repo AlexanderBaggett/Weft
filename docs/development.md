@@ -2,8 +2,8 @@
 
 Weft's first release still includes the full language on .NET and JVM. The current
 compiler includes the Phase 1 foundation and the first Phase 2 function work: ordinary
-functions, static helper classes, overloads, named/optional arguments, basic control
-flow, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
+functions, static helper classes, overloads, named/optional arguments, loops with
+break/continue, conditional expressions, signed integers, booleans, strings, and two working emitters. Cross-cutting declarations have
 syntax representation and explicit not-yet-implemented diagnostics. They remain
 required work in the [phase trackers](phases/README.md).
 
@@ -11,7 +11,8 @@ required work in the [phase trackers](phases/README.md).
 
 Install .NET SDK 10 and a full JDK (javac, java, jar) version 21 or newer on PATH. Java
 source targets release 21 without preview features. Development validation uses SDK
-10.0.111 and both Temurin JDK 21.0.12.1 and OpenJDK 26.0.2. `global.json` permits the
+10.0.111 and both Temurin JDK 21.0.12.1 and OpenJDK 26.0.2 for the foundation;
+the September 30 control-flow checkpoint uses SDK 10.0.112 and OpenJDK 27. `global.json` permits the
 latest installed .NET 10 feature band. NuGet package versions are pinned in the project
 files. Initial restore requires network access or a populated package cache.
 
@@ -120,4 +121,7 @@ entry, WF41xx Roslyn, WF42xx JVM toolchain, WF50xx manifest/CLI I/O. Future feat
 identities with their acceptance cases rather than reusing unrelated error codes.
 Function binding adds WF2011 for inaccessible methods, WF2012 for invalid modifiers,
 WF2013 for invalid defaults/parameter order, WF2014 for invalid named arguments, and
-WF2015 for ambiguous overloads. Duplicate signatures remain WF2002.
+WF2015 for ambiguous overloads. Duplicate signatures remain WF2002. Control flow adds
+WF2016 for jumps outside a loop, WF2017 for an unbraced declaration used as a branch/loop
+body, and WF1104 for multiple variables in a `var` for-initializer. See the
+[control-flow contract](contracts/control-flow.md).
