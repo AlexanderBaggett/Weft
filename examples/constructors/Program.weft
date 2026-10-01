@@ -1,0 +1,32 @@
+namespace Demo;
+
+public class Order
+{
+    public readonly string Customer;
+    public int Quantity { get; }
+    public long UnitPrice { get; }
+    public long Total => Quantity * UnitPrice;
+
+    public Order(string customer) : this(customer, quantity: 1) { }
+
+    public Order(string customer, int quantity)
+        : this(customer, quantity, unitPrice: 25L) { }
+
+    private Order(string customer, int quantity, long unitPrice)
+    {
+        Customer = customer;
+        Quantity = quantity;
+        UnitPrice = unitPrice;
+    }
+}
+
+public static class Program
+{
+    public static void Main()
+    {
+        var first = new Order("Ada");
+        var second = new Order("Grace", 3);
+        Print(first.Customer + ":" + first.Total);
+        Print(second.Customer + ":" + second.Total);
+    }
+}

@@ -33,12 +33,14 @@ public sealed partial class Binder
         foreach (var tree in inputs) Declare(tree.Declarations, "");
         ValidatePublicContracts(); ValidateRequiredMembers();
         if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray());
+        var orderedBodies = OrderConstructorBodies().ToArray();
+        if (diagnostics.HasErrors) return new(null, diagnostics.ToImmutableArray(), functions.Values.SelectMany(group => group).ToImmutableArray(), types.Values.ToImmutableArray());
         var bound = ImmutableArray.CreateBuilder<IrFunction>();
-        foreach (var (syntax, symbol, ns) in bodies)
+        foreach (var (syntax, symbol, ns) in orderedBodies)
         {
             currentFunction = symbol;
             currentNamespace = ns;
-            scope = new(); initializedFields = [];
+            scope = new(); initializedFields = []; constructorExits = [];
             var prefix = ImmutableArray.CreateBuilder<IrStatement>();
             if (symbol.Receiver is not null)
             {
@@ -46,16 +48,24 @@ public sealed partial class Binder
                 else
                 {
                     var origin = new SourceOrigin(symbol.Location, "constructor-allocation");
-                    prefix.Add(new IrVariable(symbol.Receiver, new IrAllocate(symbol.Receiver.Type, origin), origin));
-                    bindingFieldInitializer = true;
-                    foreach (var (field, initializer) in fields[symbol.ContainingType!])
+                    if (constructorChains.TryGetValue(symbol.Id, out var delegated))
                     {
-                        if (initializer is null) continue;
-                        var value = ConvertImplicit(BindExpression(initializer), field.Type);
-                        prefix.Add(new IrExpressionStatement(new IrFieldWrite(field, This(origin), value, new(initializer.Location)), new(initializer.Location)));
-                        initializedFields.Add(field.Id);
+                        prefix.Add(new IrVariable(symbol.Receiver, delegated, new(delegated.Origin.Location, "constructor-chain", delegated.Origin)));
+                        initializedFields = constructorInitializedFields.TryGetValue(delegated.Function.Id, out var initialized) ? initialized.ToHashSet() : [];
                     }
-                    bindingFieldInitializer = false;
+                    else
+                    {
+                        prefix.Add(new IrVariable(symbol.Receiver, new IrAllocate(symbol.Receiver.Type, origin), origin));
+                        bindingFieldInitializer = true;
+                        foreach (var (field, initializer) in fields[symbol.ContainingType!])
+                        {
+                            if (initializer is null) continue;
+                            var value = ConvertImplicit(BindExpression(initializer), field.Type);
+                            prefix.Add(new IrExpressionStatement(new IrFieldWrite(field, This(origin), value, new(initializer.Location)), new(initializer.Location)));
+                            initializedFields.Add(field.Id);
+                        }
+                        bindingFieldInitializer = false;
+                    }
                     scope.Declare(symbol.Receiver);
                 }
             }
@@ -70,9 +80,11 @@ public sealed partial class Binder
                 if (ControlFlow.CanComplete(body))
                 {
                     RequireInitialized(syntax.Location, completing: true);
+                    constructorExits.Add(initializedFields.ToHashSet());
                     prefix.Add(new IrReturn(This(new(syntax.Location)), new(syntax.Location, "constructor-result")));
                 }
                 body = body with { Statements = prefix.ToImmutable() };
+                constructorInitializedFields[symbol.Id] = IntersectStates(constructorExits, fields[symbol.ContainingType!].Select(f => f.Symbol.Id).ToHashSet());
             }
             if (symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(body)) diagnostics.Error("WF2007", $"Not all paths in '{symbol.Name}' return '{symbol.ReturnType.Name}'.", syntax.Location);
             bound.Add(new(symbol, body, new(syntax.Location)));
@@ -136,7 +148,9 @@ public sealed partial class Binder
                 if (currentFunction.IsConstructor)
                 {
                     if (returned.Expression is not null) diagnostics.Error("WF2003", "A constructor return cannot specify a value.", returned.Location);
-                    RequireInitialized(returned.Location, completing: true); return new IrReturn(This(origin), origin);
+                    RequireInitialized(returned.Location, completing: true);
+                    constructorExits.Add(initializedFields.ToHashSet());
+                    return new IrReturn(This(origin), origin);
                 }
                 var value = returned.Expression is null ? null : BindExpression(returned.Expression);
                 if (value?.Type == WeftType.Void) diagnostics.Error("WF2003", "A void return cannot carry an expression; call it before returning.", statement.Location);
@@ -242,7 +256,7 @@ public sealed partial class Binder
                 return BindMember(member) is { } selected ? ReadTarget(selected) : Error(origin);
             case NameSyntax { Name: "this" }:
                 if (currentFunction.Receiver is null || bindingFieldInitializer)
-                { diagnostics.Error("WF2020", "this requires an instance method or constructor body.", syntax.Location); return Error(origin); }
+                { diagnostics.Error("WF2020", "this requires an instance body and is unavailable in field or constructor initializers.", syntax.Location); return Error(origin); }
                 RequireInitialized(syntax.Location); return This(origin);
             case NameSyntax name:
                 var variable = scope.Lookup(name.Name);

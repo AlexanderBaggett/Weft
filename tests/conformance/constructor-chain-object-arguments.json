@@ -1,0 +1,7 @@
+{
+  "id": "constructor-chain-object-arguments",
+  "sources": {
+    "main.weft": "class Argument { public required string Text { get; init; } public int Number { get; set; } }\nclass C {\n    public string Text { get; }\n    public C(int n) : this(new Argument { Text = \"argument\", Number = n + 1 }) { Print(\"outer body\"); }\n    private C(Argument arg) { Text = arg.Text; Print(arg.Number); }\n}\nvoid Main() { Print(new C(4).Text); }\n"
+  },
+  "stdout": "5\nouter body\nargument\n"
+}

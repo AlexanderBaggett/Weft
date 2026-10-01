@@ -201,7 +201,7 @@ initialization. No parent task is marked complete by this property checkpoint.
 
 ### Object-initializer checkpoint — 2026-09-30
 
-Worktree based on `b661315`, extending P02-003/011/032. Object initializers run after
+Committed and pushed as `81287b2`, extending P02-003/011/032. Object initializers run after
 construction with source-ordered member assignments and enclosing lexical scope.
 Nested member initializers mutate existing objects. Automatic/custom init accessors
 restrict writes to construction; required fields/properties make caller assignments
@@ -229,8 +229,36 @@ Constructor chaining, static initialization, collection/indexer initialization,
 models/records, and broader type integration remain required work. No parent task
 is marked complete.
 
-**Next:** continue P02-003 with constructor chaining, models, records, and their
-specified construction/equality behavior. Generic/interface/nullable types and complete public
+### Constructor-chain checkpoint — 2026-09-30
+
+Worktree based on `81287b2`, extending P02-003/011/032. `: this(...)` delegates through
+ordinary overload/argument rules; `: base()` is accepted for the current root class.
+Field and auto-property initializers run once at the chain's terminal constructor,
+then bodies run from inner to outer on the same object. Parameter mutations and named
+arguments retain written order. Definitely initialized fields propagate across all
+normal return paths, and required caller obligations remain explicit. Shared graph
+checks reject circular delegation in source and IR while preserving fresh allocation.
+See [constructor chaining](../../contracts/constructors.md) and its
+[runnable example](../../../examples/constructors/Program.weft).
+
+- `dotnet test Weft.slnx --no-restore`: **332 passed, 0 failed, 0 skipped**, using
+  .NET SDK 10.0.112 and OpenJDK 27, emitting Java release 21.
+- Five new executable conformance programs bring the case count to 51. Constructor
+  binding and malformed-IR checks cover argument errors, scope, circular delegation,
+  initialization summaries, required obligations, and receiver freshness.
+- Independent implementation, documentation, and example review is complete with no
+  actionable findings. Additional reviewer programs passed on both targets, covering
+  argument-side property updates, parameter mutations, early returns, readonly/init
+  state, and final required-member initialization.
+- CLI runs of the constructor example on both backends printed `Ada:25` and `Grace:75`.
+  All 46 Markdown documents have valid relative link targets and `git diff --check`
+  passes. Hosted CI remains deferred.
+
+Inheritance/base arguments, static initialization, models/records, and remaining type
+integration stay required. No parent task is marked complete by this checkpoint.
+
+**Next:** continue P02-003 with models and records, plus static member/type initialization
+and the remaining inheritance/type work under P02-004. Generic/interface/nullable types and complete public
 project contracts remain under their original tasks before services and shared
 middleware integration. Preserve the accepted pipeline syntax; its graph/project binding remains
 owned by P03-001 and P06-001/003. Append new work with unused task IDs when scope grows.

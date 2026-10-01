@@ -12,8 +12,10 @@ public sealed record NamespaceSyntax(string Namespace, bool FileScoped, Immutabl
 public sealed record ParameterSyntax(TypeSyntax Type, string Name, SourceLocation Location, ExpressionSyntax? Default = null) : SyntaxNode(Location);
 public sealed record ClassSyntax(string ClassName, ImmutableArray<DeclarationSyntax> Members,
     ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(ClassName, Location);
+public sealed record ConstructorInitializerSyntax(string Kind, ImmutableArray<ArgumentSyntax> Arguments,
+    SourceLocation Location) : SyntaxNode(Location);
 public sealed record FunctionSyntax(string FunctionName, TypeSyntax ReturnType, ImmutableArray<ParameterSyntax> Parameters,
-    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false, bool IsInitAccessor = false) : DeclarationSyntax(FunctionName, Location);
+    BlockSyntax? Body, ImmutableArray<string> Modifiers, SourceLocation Location, bool IsConstructor = false, bool IsInitAccessor = false, ConstructorInitializerSyntax? Initializer = null) : DeclarationSyntax(FunctionName, Location);
 public sealed record FieldSyntax(string FieldName, TypeSyntax Type, ExpressionSyntax? Initializer,
     ImmutableArray<string> Modifiers, SourceLocation Location) : DeclarationSyntax(FieldName, Location);
 public sealed record AccessorSyntax(string Kind, BlockSyntax? Body, ImmutableArray<string> Modifiers,

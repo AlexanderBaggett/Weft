@@ -2,7 +2,7 @@
 
 Weft's first release still includes the full language on .NET and JVM. The current
 compiler includes the Phase 1 foundation and Phase 2 ordinary-language work: functions,
-classes, constructors, object initializers, required members, fields, instance
+classes, chained constructors, object initializers, required members, fields, instance
 properties/get/set/init accessors, instance/static methods,
 overloads, named/optional
 arguments, loops with break/continue, conditionals, update/compound-assignment
@@ -108,6 +108,16 @@ dotnet run --project src/Weft.Cli -- run --project examples/initializers --backe
 Each run prints `Ada:London:3` and `Ada:London:4`. See the
 [initialization contract](contracts/initialization.md) for required-member and non-null checks.
 
+The [constructor example](../examples/constructors/Program.weft) chains public overloads
+to a private constructor that initializes readonly state:
+
+```sh
+dotnet run --project src/Weft.Cli -- run --project examples/constructors --backend dotnet
+dotnet run --project src/Weft.Cli -- run --project examples/constructors --backend jvm
+```
+
+Each run prints `Ada:25` and `Grace:75`. See [constructor chaining](contracts/constructors.md).
+
 ## Initial manifest
 
 ```toml
@@ -167,3 +177,5 @@ See the [object contract](contracts/objects.md). Properties add WF2023 for a mis
 getter/setter and WF2024 for invalid accessor declarations or accessibility. Initialization
 adds WF2025 for init writes outside construction, WF2026 for missing required members,
 WF2027 for invalid required declarations, and WF2028 for invalid member initializers.
+Constructor chaining adds WF2029 for delegation cycles and WF1105 for invalid
+constructor-initializer syntax.

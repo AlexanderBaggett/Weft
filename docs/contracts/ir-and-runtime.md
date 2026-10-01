@@ -52,8 +52,10 @@ sequences. Property metadata remains available in binding results; auto-properti
 use compiler-owned fields with ordinary initialization rules. See [properties](properties.md).
 
 Object initializers use `IrSequence.Initializing` to identify the first binding's
-fresh constructor result. Constructors must start by allocating their receiver and
-return only that receiver. The sequence yields that same object after ordered member
+fresh constructor result. Constructors must start by allocating their receiver or
+delegating to a constructor of the same class, and return only that receiver. Shared
+constructor-graph checks reject direct/indirect delegation cycles, so each accepted
+chain ends in allocation. See [constructor chaining](constructors.md). The sequence yields that same object after ordered member
 writes. The validator authorizes init accessor calls only on that identity or the
 current receiver in a constructor/init accessor, and prevents identity reassignment.
 Required member obligations and incomplete-reference checks run before lowering;

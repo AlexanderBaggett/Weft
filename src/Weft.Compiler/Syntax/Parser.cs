@@ -117,6 +117,14 @@ public sealed class Parser
             if (before == position) break;
         }
         Expect(")");
+        ConstructorInitializerSyntax? constructorInitializer = null;
+        if (Take(":"))
+        {
+            var initializerKind = Identifier();
+            if (!constructor || initializerKind.Text is not ("this" or "base"))
+                diagnostics.Error("WF1105", "Only a constructor may declare a this(...) or base(...) initializer.", initializerKind.Location);
+            constructorInitializer = new(initializerKind.Text, ParseArguments(), initializerKind.Location);
+        }
         BlockSyntax? functionBody = null;
         if (Take("=>"))
         {
@@ -127,7 +135,7 @@ public sealed class Parser
         }
         else if (Current.Text == "{") functionBody = ParseBlock();
         else Expect(";");
-        return new FunctionSyntax(functionName, returnType, parameters.ToImmutable(), functionBody, modifiers.ToImmutable(), location, constructor);
+        return new FunctionSyntax(functionName, returnType, parameters.ToImmutable(), functionBody, modifiers.ToImmutable(), location, constructor, Initializer: constructorInitializer);
     }
 
     private PropertySyntax ParseProperty(string name, TypeSyntax type, ImmutableArray<string> modifiers, SourceLocation location)

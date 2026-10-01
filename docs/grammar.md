@@ -314,8 +314,11 @@ foundation-field = { modifier } type ident [ "=" expression ] ";" ;
 foundation-property = { visibility | "required" } type ident
                       ( "=>" expression ";" | "{" accessor { accessor } "}" [ "=" expression ";" ] ) ;
 accessor        = [ visibility ] ( "get" | "set" | "init" ) ( ";" | foundation-block | "=>" expression ";" ) ;
-constructor     = { visibility } ident "(" [ parameter { "," parameter } ] ")" foundation-block ;
-(* The constructor name must match its containing class. Static classes allow static methods only. *)
+constructor     = { visibility } ident "(" [ parameter { "," parameter } ] ")"
+                  [ ":" ( "this" | "base" ) "(" [ argument { "," argument } ] ")" ]
+                  ( foundation-block | "=>" expression ";" ) ;
+(* The constructor name must match its class. this(...) delegates; base() is root-only for now.
+   Static classes allow static methods only. *)
 foundation-function = { modifier } type ident "(" [ parameter { "," parameter } ] ")"
                       ( foundation-block | "=>" expression ";" | ";" ) ;
 parameter       = type ident [ "=" constant-expression ] ;

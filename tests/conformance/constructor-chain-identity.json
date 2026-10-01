@@ -1,0 +1,7 @@
+{
+  "id": "constructor-chain-identity",
+  "sources": {
+    "main.weft": "class Holder { public C Captured = new C(0); }\nclass C {\n    public readonly int Value;\n    public C(int value) { Value = value; }\n    public C(Holder holder) : this(5) { holder.Captured = this; Value += 2; }\n    public C(Holder holder, string tag) : this(holder) { Print(holder.Captured == this); Print(tag); Value += 3; }\n}\nvoid Main() { var h = new Holder(); var c = new C(h, \"outer\"); Print(c == h.Captured); Print(c.Value); }\n"
+  },
+  "stdout": "true\nouter\ntrue\n10\n"
+}

@@ -27,6 +27,7 @@ public static class IrValidator
         FunctionSymbol? currentFunction = null;
         HashSet<int> functionIdentities = [];
         HashSet<int> initializing = [];
+        var constructorTargets = new Dictionary<int, FunctionSymbol>();
         foreach (var function in module.Functions)
         {
             var signature = function.Symbol.Name + "(" + string.Join(",", function.Symbol.Parameters.Select(p => p.Type.Name)) + ")";
@@ -39,10 +40,17 @@ public static class IrValidator
             if (currentFunction.IsInitAccessor && (currentFunction.IsConstructor || currentFunction.Receiver is null ||
                 currentFunction.ReturnType != WeftType.Void || currentFunction.Parameters.Length != 1))
                 Fail("Invalid IR init accessor signature.", function.Origin);
-            if (currentFunction.IsConstructor && (currentFunction.Receiver is null || function.Body.Statements.IsDefaultOrEmpty ||
-                function.Body.Statements[0] is not IrVariable allocation || allocation.Symbol != currentFunction.Receiver ||
-                allocation.Initializer is not IrAllocate memory || memory.Type != currentFunction.Receiver.Type))
-                Fail("IR constructor must begin by allocating its receiver.", function.Origin);
+            if (currentFunction.IsConstructor)
+            {
+                if (currentFunction.Receiver is null || function.Body.Statements.IsDefaultOrEmpty ||
+                    function.Body.Statements[0] is not IrVariable allocation || allocation.Symbol != currentFunction.Receiver)
+                    Fail("IR constructor must begin by initializing its receiver.", function.Origin);
+                else if (allocation.Initializer is IrCall { Function.IsConstructor: true } delegated &&
+                    delegated.Type == currentFunction.Receiver.Type && delegated.Function.ContainingType == currentFunction.ContainingType)
+                    constructorTargets[currentFunction.Id] = delegated.Function;
+                else if (allocation.Initializer is not IrAllocate memory || memory.Type != currentFunction.Receiver.Type)
+                    Fail("IR constructor receiver must come from allocation or a same-class constructor chain.", function.Origin);
+            }
             var locals = new Dictionary<int, VariableSymbol>();
             var identities = new HashSet<int>(); functionIdentities = identities;
             if (function.Symbol.Receiver is { } receiver)
@@ -64,6 +72,8 @@ public static class IrValidator
             Statement(function.Body, locals, identities, function.Symbol.ReturnType);
             if (function.Symbol.ReturnType != WeftType.Void && ControlFlow.CanComplete(function.Body)) Fail("IR function can fall through without a return value.", function.Origin);
         }
+        ConstructorGraph.Order(functions.Values.Where(f => f.IsConstructor), constructorTargets, cycle =>
+            Fail("Circular IR constructor chain: " + string.Join(" -> ", cycle.Select(ConstructorGraph.Signature)) + ".", new(cycle[0].Location)));
         return diagnostics.ToImmutableArray();
 
         void Fail(string message, SourceOrigin origin) => diagnostics.Error("WF3001", message, origin.Location);

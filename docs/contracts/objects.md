@@ -56,7 +56,8 @@ parameter, result, or field types. Separate-project exports remain Phase 6 work.
 optional-argument, and conversion rules. Supplied arguments evaluate once in their
 written order, before allocation and field initialization. Each object then runs its
 field initializers in declaration order, followed by the selected constructor body.
-Initializers run once for each construction. They can call static/free functions and
+Initializers run once for each construction, including when constructors
+[chain through this(...)](constructors.md). They can call static/free functions and
 access already constructed objects, but cannot read `this`, this object's instance
 fields/methods, or constructor parameters.
 
@@ -98,8 +99,8 @@ uses the same string concatenation. See [control flow and updates](control-flow.
 ## Representation and verification
 
 Shared IR records class/field identities and explicit method receivers. Each constructor
-lowers to a factory function that allocates the object, runs initialization, and returns
-it. Both backends emit a host reference object and direct calls with an explicit receiver;
+lowers to a factory that either allocates and initializes the object or delegates to
+another constructor factory of the same class, then returns that same receiver. Both backends emit a host reference object and direct calls with an explicit receiver;
 this checkpoint introduces no dynamic dispatch or reflection.
 
 `IrFieldRead`, `IrFieldWrite`, and `IrFieldUpdate` retain the field and receiver.
@@ -120,7 +121,7 @@ returns while traversing function bodies for generated helpers.
 ## Remaining object work
 
 [Object/nested initializers, required members, and init accessors](initialization.md)
-are executable. Constructor chaining, models, records and
+and [constructor chaining](constructors.md) are executable. Models, records and
 record value equality/copying, inheritance/interfaces, nested and generic types,
 nullable references, static fields/properties and type initialization,
 indexers, and callable members remain required work. See [properties](properties.md)

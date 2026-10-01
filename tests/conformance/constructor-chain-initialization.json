@@ -1,0 +1,7 @@
+{
+  "id": "constructor-chain-initialization",
+  "sources": {
+    "main.weft": "class C {\n    public required string Name { get; init; }\n    public readonly string Code;\n    public C() : this(true) { Print(Name); Print(Code); Name += \"-outer\"; }\n    public C(bool choose) { Code = \"code\"; if (choose) { Name = \"left\"; return; } Name = \"right\"; }\n}\nvoid Main() { var c = new C { Name = \"caller\" }; Print(c.Name); }\n"
+  },
+  "stdout": "left\ncode\ncaller\n"
+}

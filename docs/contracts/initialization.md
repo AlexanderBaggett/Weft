@@ -95,8 +95,9 @@ allowing a custom accessor to observe a host null value.
 
 The shared IR uses a sequence with an explicit `Initializing` identity. Its first
 binding must construct that object and its result must return the same object.
-Constructors must allocate their receiver first and return only that receiver, never
-an existing argument object. Subsequent member assignments execute in order. The
+Constructors must first allocate their receiver or obtain it through a validated
+[constructor chain](constructors.md), then return only that receiver, never an existing
+argument object. Subsequent member assignments execute in order. The
 validator checks this structure,
 rejects reassignment of that identity, and permits init calls only through it or the
 current receiver of a constructor/init accessor. Init functions have explicit markers
@@ -112,7 +113,8 @@ source and malformed initialization IR; seven executable conformance cases cover
 required references, custom init bodies, nested/recursively empty getters, enclosing
 scope, and safe custom accessor timing on both runtimes.
 
-Constructor chaining, static initialization, inheritance/interfaces, collection/indexer
+[Constructor chaining](constructors.md) is executable. Static initialization,
+inheritance/interfaces, collection/indexer
 initializers, models/records, and broader nullable/generic/closure integration remain
 required work. Constructor contracts that explicitly satisfy required members instead
 of requiring caller assignments are not implemented. No host attribute is accepted

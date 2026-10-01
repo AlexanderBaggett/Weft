@@ -1,0 +1,7 @@
+{
+  "id": "constructor-chain-arguments",
+  "sources": {
+    "main.weft": "class C {\n    public int Value;\n    public C(int n) : this(second: n++, first: ++n) { Print(\"outer:\" + n); }\n    private C(int first, long second, int extra = 7) { Print(\"inner:\" + first + \":\" + second + \":\" + extra); Value = first; }\n    public C(string label) : this(2) => Print(label);\n}\nvoid Main() { Print(new C(3).Value); Print(new C(\"expression body\").Value); }\n"
+  },
+  "stdout": "inner:5:3:7\nouter:5\n5\ninner:4:2:7\nouter:4\nexpression body\n4\n"
+}

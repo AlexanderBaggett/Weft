@@ -1,0 +1,7 @@
+{
+  "id": "constructor-chain-order",
+  "sources": {
+    "main.weft": "int Mark(string name, int value) { Print(name); return value; }\nclass C {\n    public int Field = Mark(\"field\", 1);\n    public int Count { get; set; } = Mark(\"property\", 2);\n    public C() : this(Mark(\"outer argument\", 4)) { Print(\"outer body\"); }\n    public C(int n) : this(second: Mark(\"second argument\", n + 1), first: Mark(\"first argument\", n)) { Print(\"middle body:\" + n); }\n    private C(int first, long second) : base() { Print(\"inner body:\" + first + \":\" + second); }\n}\nvoid Main() { var c = new C { Count = Mark(\"object initializer\", 9) }; Print(c.Field); Print(c.Count); }\n"
+  },
+  "stdout": "outer argument\nsecond argument\nfirst argument\nfield\nproperty\ninner body:4:5\nmiddle body:4\nouter body\nobject initializer\n1\n9\n"
+}
